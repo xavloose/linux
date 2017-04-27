@@ -3,6 +3,7 @@ free patch to the mainline linux kernel. I am renaming and reorgainizing the
 project to avoid trademark issues. The original patch was under the gplv2 Licsence
 but I plan to use a modified MIT that will consist of my changes on top of theirs.
 
+[![paypal]((https://img.shields.io/badge/Donate-PayPal-green.svg))](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=NFPU6CRVSAES2&lc=US&item_name=xsec&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donate_SM%2egif%3aNonHosted)
 
 Linux kernel
 ============

@@ -1,0 +1,205 @@
+diff --git a/block/blk-cgroup.c b/block/blk-cgroup.c
+index b08ccbb..87fe492 100644
+--- a/block/blk-cgroup.c
++++ b/block/blk-cgroup.c
+@@ -561,10 +561,10 @@ u64 __blkg_prfill_rwstat(struct seq_file *sf, struct blkg_policy_data *pd,
+
+ 	for (i = 0; i < BLKG_RWSTAT_NR; i++)
+ 		seq_printf(sf, "%s %s %llu\n", dname, rwstr[i],
+-			   (unsigned long long)atomic64_read(&rwstat->aux_cnt[i]));
++			   (unsigned long long)atomic64_read_unchecked(&rwstat->aux_cnt[i]));
+
+-	v = atomic64_read(&rwstat->aux_cnt[BLKG_RWSTAT_READ]) +
+-		atomic64_read(&rwstat->aux_cnt[BLKG_RWSTAT_WRITE]);
++	v = atomic64_read_unchecked(&rwstat->aux_cnt[BLKG_RWSTAT_READ]) +
++		atomic64_read_unchecked(&rwstat->aux_cnt[BLKG_RWSTAT_WRITE]);
+ 	seq_printf(sf, "%s Total %llu\n", dname, (unsigned long long)v);
+ 	return v;
+ }
+@@ -716,7 +716,7 @@ u64 blkg_stat_recursive_sum(struct blkcg_gq *blkg,
+ 		else
+ 			stat = (void *)blkg + off;
+
+-		sum += blkg_stat_read(stat) + atomic64_read(&stat->aux_cnt);
++		sum += blkg_stat_read(stat) + atomic64_read_unchecked(&stat->aux_cnt);
+ 	}
+ 	rcu_read_unlock();
+
+@@ -760,7 +760,7 @@ struct blkg_rwstat blkg_rwstat_recursive_sum(struct blkcg_gq *blkg,
+ 			rwstat = (void *)pos_blkg + off;
+
+ 		for (i = 0; i < BLKG_RWSTAT_NR; i++)
+-			atomic64_add(atomic64_read(&rwstat->aux_cnt[i]) +
++			atomic64_add_unchecked(atomic64_read_unchecked(&rwstat->aux_cnt[i]) +
+ 				percpu_counter_sum_positive(&rwstat->cpu_cnt[i]),
+ 				&sum.aux_cnt[i]);
+ 	}
+@@ -886,13 +886,13 @@ static int blkcg_print_stat(struct seq_file *sf, void *v)
+
+ 		rwstat = blkg_rwstat_recursive_sum(blkg, NULL,
+ 					offsetof(struct blkcg_gq, stat_bytes));
+-		rbytes = atomic64_read(&rwstat.aux_cnt[BLKG_RWSTAT_READ]);
+-		wbytes = atomic64_read(&rwstat.aux_cnt[BLKG_RWSTAT_WRITE]);
++		rbytes = atomic64_read_unchecked(&rwstat.aux_cnt[BLKG_RWSTAT_READ]);
++		wbytes = atomic64_read_unchecked(&rwstat.aux_cnt[BLKG_RWSTAT_WRITE]);
+
+ 		rwstat = blkg_rwstat_recursive_sum(blkg, NULL,
+ 					offsetof(struct blkcg_gq, stat_ios));
+-		rios = atomic64_read(&rwstat.aux_cnt[BLKG_RWSTAT_READ]);
+-		wios = atomic64_read(&rwstat.aux_cnt[BLKG_RWSTAT_WRITE]);
++		rios = atomic64_read_unchecked(&rwstat.aux_cnt[BLKG_RWSTAT_READ]);
++		wios = atomic64_read_unchecked(&rwstat.aux_cnt[BLKG_RWSTAT_WRITE]);
+
+ 		spin_unlock_irq(blkg->q->queue_lock);
+
+diff --git a/block/blk-core.c b/block/blk-core.c
+index d1f2801..41bbb9a 100644
+--- a/block/blk-core.c
++++ b/block/blk-core.c
+@@ -3562,8 +3562,11 @@ int __init blk_dev_init(void)
+ 	if (!kblockd_workqueue)
+ 		panic("Failed to create kblockd\n");
+
+-	request_cachep = kmem_cache_create("blkdev_requests",
+-			sizeof(struct request), 0, SLAB_PANIC, NULL);
++	request_cachep = kmem_cache_create_usercopy("blkdev_requests",
++			sizeof(struct request), 0, SLAB_PANIC,
++			offsetof(struct request, __cmd),
++			sizeof(((struct request *)0)->__cmd),
++			NULL);
+
+ 	blk_requestq_cachep = kmem_cache_create("request_queue",
+ 			sizeof(struct request_queue), 0, SLAB_PANIC, NULL);
+diff --git a/block/blk-map.c b/block/blk-map.c
+index 27fd8d92..c03179e 100644
+--- a/block/blk-map.c
++++ b/block/blk-map.c
+@@ -223,7 +223,7 @@ int blk_rq_map_kern(struct request_queue *q, struct request *rq, void *kbuf,
+ 	if (!len || !kbuf)
+ 		return -EINVAL;
+
+-	do_copy = !blk_rq_aligned(q, addr, len) || object_is_on_stack(kbuf);
++	do_copy = !blk_rq_aligned(q, addr, len) || object_starts_on_stack(kbuf);
+ 	if (do_copy)
+ 		bio = bio_copy_kern(q, kbuf, len, gfp_mask, reading);
+ 	else
+diff --git a/block/blk-softirq.c b/block/blk-softirq.c
+index 06cf980..3eb814a 100644
+--- a/block/blk-softirq.c
++++ b/block/blk-softirq.c
+@@ -18,7 +18,7 @@ static DEFINE_PER_CPU(struct list_head, blk_cpu_done);
+  * Softirq action handler - move entries to local list and loop over them
+  * while passing them to the queue registered handler.
+  */
+-static __latent_entropy void blk_done_softirq(struct softirq_action *h)
++static __latent_entropy void blk_done_softirq(void)
+ {
+ 	struct list_head *cpu_list, local_list;
+
+diff --git a/block/cfq-iosched.c b/block/cfq-iosched.c
+index 3ab6807..e3e68f0 100644
+--- a/block/cfq-iosched.c
++++ b/block/cfq-iosched.c
+@@ -1965,8 +1965,8 @@ static u64 cfqg_prfill_sectors_recursive(struct seq_file *sf,
+ {
+ 	struct blkg_rwstat tmp = blkg_rwstat_recursive_sum(pd->blkg, NULL,
+ 					offsetof(struct blkcg_gq, stat_bytes));
+-	u64 sum = atomic64_read(&tmp.aux_cnt[BLKG_RWSTAT_READ]) +
+-		atomic64_read(&tmp.aux_cnt[BLKG_RWSTAT_WRITE]);
++	u64 sum = atomic64_read_unchecked(&tmp.aux_cnt[BLKG_RWSTAT_READ]) +
++		atomic64_read_unchecked(&tmp.aux_cnt[BLKG_RWSTAT_WRITE]);
+
+ 	return __blkg_prfill_u64(sf, pd, sum >> 9);
+ }
+diff --git a/block/compat_ioctl.c b/block/compat_ioctl.c
+index 556826a..4e7c5fd 100644
+--- a/block/compat_ioctl.c
++++ b/block/compat_ioctl.c
+@@ -156,7 +156,7 @@ static int compat_cdrom_generic_command(struct block_device *bdev, fmode_t mode,
+ 	cgc = compat_alloc_user_space(sizeof(*cgc));
+ 	cgc32 = compat_ptr(arg);
+
+-	if (copy_in_user(&cgc->cmd, &cgc32->cmd, sizeof(cgc->cmd)) ||
++	if (copy_in_user(cgc->cmd, cgc32->cmd, sizeof(cgc->cmd)) ||
+ 	    get_user(data, &cgc32->buffer) ||
+ 	    put_user(compat_ptr(data), &cgc->buffer) ||
+ 	    copy_in_user(&cgc->buflen, &cgc32->buflen,
+@@ -341,7 +341,7 @@ static int compat_fd_ioctl(struct block_device *bdev, fmode_t mode,
+ 		err |= __get_user(f->spec1, &uf->spec1);
+ 		err |= __get_user(f->fmt_gap, &uf->fmt_gap);
+ 		err |= __get_user(name, &uf->name);
+-		f->name = compat_ptr(name);
++		f->name = (void __force_kernel *)compat_ptr(name);
+ 		if (err) {
+ 			err = -EFAULT;
+ 			goto out;
+diff --git a/block/genhd.c b/block/genhd.c
+index fcd6d4f..96e433b 100644
+--- a/block/genhd.c
++++ b/block/genhd.c
+@@ -471,21 +471,24 @@ static char *bdevt_str(dev_t devt, char *buf)
+
+ /*
+  * Register device numbers dev..(dev+range-1)
+- * range must be nonzero
++ * Noop if @range is zero.
+  * The hash chain is sorted on range, so that subranges can override.
+  */
+ void blk_register_region(dev_t devt, unsigned long range, struct module *module,
+ 			 struct kobject *(*probe)(dev_t, int *, void *),
+ 			 int (*lock)(dev_t, void *), void *data)
+ {
+-	kobj_map(bdev_map, devt, range, module, probe, lock, data);
++	if (range)
++		kobj_map(bdev_map, devt, range, module, probe, lock, data);
+ }
+
+ EXPORT_SYMBOL(blk_register_region);
+
++/* undo blk_register_region(), noop if @range is zero */
+ void blk_unregister_region(dev_t devt, unsigned long range)
+ {
+-	kobj_unmap(bdev_map, devt, range);
++	if (range)
++		kobj_unmap(bdev_map, devt, range);
+ }
+
+ EXPORT_SYMBOL(blk_unregister_region);
+diff --git a/block/partitions/efi.c b/block/partitions/efi.c
+index bcd86e5..fe457ef 100644
+--- a/block/partitions/efi.c
++++ b/block/partitions/efi.c
+@@ -293,14 +293,14 @@ static gpt_entry *alloc_read_gpt_entries(struct parsed_partitions *state,
+ 	if (!gpt)
+ 		return NULL;
+
++	if (!le32_to_cpu(gpt->num_partition_entries))
++		return NULL;
++	pte = kcalloc(le32_to_cpu(gpt->num_partition_entries), le32_to_cpu(gpt->sizeof_partition_entry), GFP_KERNEL);
++	if (!pte)
++		return NULL;
++
+ 	count = le32_to_cpu(gpt->num_partition_entries) *
+                 le32_to_cpu(gpt->sizeof_partition_entry);
+-	if (!count)
+-		return NULL;
+-	pte = kmalloc(count, GFP_KERNEL);
+-	if (!pte)
+-		return NULL;
+-
+ 	if (read_lba(state, le64_to_cpu(gpt->partition_entry_lba),
+ 			(u8 *) pte, count) < count) {
+ 		kfree(pte);
+diff --git a/block/scsi_ioctl.c b/block/scsi_ioctl.c
+index c6fee74..49c7f8f 100644
+--- a/block/scsi_ioctl.c
++++ b/block/scsi_ioctl.c
+@@ -67,7 +67,7 @@ static int scsi_get_bus(struct request_queue *q, int __user *p)
+ 	return put_user(0, p);
+ }
+
+-static int sg_get_timeout(struct request_queue *q)
++static int __intentional_overflow(-1) sg_get_timeout(struct request_queue *q)
+ {
+ 	return jiffies_to_clock_t(q->sg_timeout);
+ }

@@ -1,0 +1,297 @@
+diff --git a/ipc/compat.c b/ipc/compat.c
+index 9b3c85f..5266b0f 100644
+--- a/ipc/compat.c
++++ b/ipc/compat.c
+@@ -396,7 +396,7 @@ COMPAT_SYSCALL_DEFINE6(ipc, u32, call, int, first, int, second,
+ 			       COMPAT_SHMLBA);
+ 		if (err < 0)
+ 			return err;
+-		return put_user(raddr, (compat_ulong_t *)compat_ptr(third));
++		return put_user(raddr, (compat_ulong_t __user *)compat_ptr(third));
+ 	}
+ 	case SHMDT:
+ 		return sys_shmdt(compat_ptr(ptr));
+@@ -747,7 +747,7 @@ COMPAT_SYSCALL_DEFINE3(shmctl, int, first, int, second, void __user *, uptr)
+ }
+
+ COMPAT_SYSCALL_DEFINE4(semtimedop, int, semid, struct sembuf __user *, tsems,
+-		       unsigned, nsops,
++		       compat_long_t, nsops,
+ 		       const struct compat_timespec __user *, timeout)
+ {
+ 	struct timespec __user *ts64;
+diff --git a/ipc/ipc_sysctl.c b/ipc/ipc_sysctl.c
+index 8ad93c2..54036e1 100644
+--- a/ipc/ipc_sysctl.c
++++ b/ipc/ipc_sysctl.c
+@@ -30,7 +30,7 @@ static void *get_ipc(struct ctl_table *table)
+ static int proc_ipc_dointvec(struct ctl_table *table, int write,
+ 	void __user *buffer, size_t *lenp, loff_t *ppos)
+ {
+-	struct ctl_table ipc_table;
++	ctl_table_no_const ipc_table;
+
+ 	memcpy(&ipc_table, table, sizeof(ipc_table));
+ 	ipc_table.data = get_ipc(table);
+@@ -41,7 +41,7 @@ static int proc_ipc_dointvec(struct ctl_table *table, int write,
+ static int proc_ipc_dointvec_minmax(struct ctl_table *table, int write,
+ 	void __user *buffer, size_t *lenp, loff_t *ppos)
+ {
+-	struct ctl_table ipc_table;
++	ctl_table_no_const ipc_table;
+
+ 	memcpy(&ipc_table, table, sizeof(ipc_table));
+ 	ipc_table.data = get_ipc(table);
+@@ -65,7 +65,7 @@ static int proc_ipc_dointvec_minmax_orphans(struct ctl_table *table, int write,
+ static int proc_ipc_doulongvec_minmax(struct ctl_table *table, int write,
+ 	void __user *buffer, size_t *lenp, loff_t *ppos)
+ {
+-	struct ctl_table ipc_table;
++	ctl_table_no_const ipc_table;
+ 	memcpy(&ipc_table, table, sizeof(ipc_table));
+ 	ipc_table.data = get_ipc(table);
+
+@@ -76,7 +76,7 @@ static int proc_ipc_doulongvec_minmax(struct ctl_table *table, int write,
+ static int proc_ipc_auto_msgmni(struct ctl_table *table, int write,
+ 	void __user *buffer, size_t *lenp, loff_t *ppos)
+ {
+-	struct ctl_table ipc_table;
++	ctl_table_no_const ipc_table;
+ 	int dummy = 0;
+
+ 	memcpy(&ipc_table, table, sizeof(ipc_table));
+@@ -99,6 +99,8 @@ static int proc_ipc_auto_msgmni(struct ctl_table *table, int write,
+ static int zero;
+ static int one = 1;
+ static int int_max = INT_MAX;
++static unsigned long long_zero = 0;
++static unsigned long long_max = LONG_MAX;
+
+ static struct ctl_table ipc_kern_table[] = {
+ 	{
+@@ -107,6 +109,8 @@ static struct ctl_table ipc_kern_table[] = {
+ 		.maxlen		= sizeof(init_ipc_ns.shm_ctlmax),
+ 		.mode		= 0644,
+ 		.proc_handler	= proc_ipc_doulongvec_minmax,
++		.extra1		= &long_zero,
++		.extra2		= &long_max,
+ 	},
+ 	{
+ 		.procname	= "shmall",
+@@ -114,6 +118,8 @@ static struct ctl_table ipc_kern_table[] = {
+ 		.maxlen		= sizeof(init_ipc_ns.shm_ctlall),
+ 		.mode		= 0644,
+ 		.proc_handler	= proc_ipc_doulongvec_minmax,
++		.extra1		= &long_zero,
++		.extra2		= &long_max,
+ 	},
+ 	{
+ 		.procname	= "shmmni",
+diff --git a/ipc/mq_sysctl.c b/ipc/mq_sysctl.c
+index 68d4e95..1477ded 100644
+--- a/ipc/mq_sysctl.c
++++ b/ipc/mq_sysctl.c
+@@ -25,7 +25,7 @@ static void *get_mq(struct ctl_table *table)
+ static int proc_mq_dointvec(struct ctl_table *table, int write,
+ 			    void __user *buffer, size_t *lenp, loff_t *ppos)
+ {
+-	struct ctl_table mq_table;
++	ctl_table_no_const mq_table;
+ 	memcpy(&mq_table, table, sizeof(mq_table));
+ 	mq_table.data = get_mq(table);
+
+@@ -35,7 +35,7 @@ static int proc_mq_dointvec(struct ctl_table *table, int write,
+ static int proc_mq_dointvec_minmax(struct ctl_table *table, int write,
+ 	void __user *buffer, size_t *lenp, loff_t *ppos)
+ {
+-	struct ctl_table mq_table;
++	ctl_table_no_const mq_table;
+ 	memcpy(&mq_table, table, sizeof(mq_table));
+ 	mq_table.data = get_mq(table);
+
+diff --git a/ipc/mqueue.c b/ipc/mqueue.c
+index 8cbd6e6..38293ad 100644
+--- a/ipc/mqueue.c
++++ b/ipc/mqueue.c
+@@ -274,6 +274,7 @@ static struct inode *mqueue_get_inode(struct super_block *sb,
+ 		mq_bytes = mq_treesize + (info->attr.mq_maxmsg *
+ 					  info->attr.mq_msgsize);
+
++		gr_learn_resource(current, RLIMIT_MSGQUEUE, u->mq_bytes + mq_bytes, 1);
+ 		spin_lock(&mq_lock);
+ 		if (u->mq_bytes + mq_bytes < u->mq_bytes ||
+ 		    u->mq_bytes + mq_bytes > rlimit(RLIMIT_MSGQUEUE)) {
+diff --git a/ipc/msg.c b/ipc/msg.c
+index e12307d..de96eac 100644
+--- a/ipc/msg.c
++++ b/ipc/msg.c
+@@ -1031,7 +1031,8 @@ void msg_exit_ns(struct ipc_namespace *ns)
+ static int sysvipc_msg_proc_show(struct seq_file *s, void *it)
+ {
+ 	struct user_namespace *user_ns = seq_user_ns(s);
+-	struct msg_queue *msq = it;
++	struct kern_ipc_perm *perm = it;
++	struct msg_queue *msq = container_of(perm, struct msg_queue, q_perm);
+
+ 	seq_printf(s,
+ 		   "%10d %10d  %4o  %10lu %10lu %5u %5u %5u %5u %5u %5u %10lu %10lu %10lu\n",
+diff --git a/ipc/msgutil.c b/ipc/msgutil.c
+index bf74eaa..dc6dbf7 100644
+--- a/ipc/msgutil.c
++++ b/ipc/msgutil.c
+@@ -53,7 +53,7 @@ static struct msg_msg *alloc_msg(size_t len)
+ 	size_t alen;
+
+ 	alen = min(len, DATALEN_MSG);
+-	msg = kmalloc(sizeof(*msg) + alen, GFP_KERNEL_ACCOUNT);
++	msg = kmalloc(sizeof(*msg) + alen, GFP_KERNEL_ACCOUNT|GFP_USERCOPY);
+ 	if (msg == NULL)
+ 		return NULL;
+
+@@ -65,7 +65,7 @@ static struct msg_msg *alloc_msg(size_t len)
+ 	while (len > 0) {
+ 		struct msg_msgseg *seg;
+ 		alen = min(len, DATALEN_SEG);
+-		seg = kmalloc(sizeof(*seg) + alen, GFP_KERNEL_ACCOUNT);
++		seg = kmalloc(sizeof(*seg) + alen, GFP_KERNEL_ACCOUNT|GFP_USERCOPY);
+ 		if (seg == NULL)
+ 			goto out_err;
+ 		*pseg = seg;
+diff --git a/ipc/sem.c b/ipc/sem.c
+index 10b94bc..136c0ae 100644
+--- a/ipc/sem.c
++++ b/ipc/sem.c
+@@ -1814,7 +1814,7 @@ static int get_queue_result(struct sem_queue *q)
+ }
+
+ SYSCALL_DEFINE4(semtimedop, int, semid, struct sembuf __user *, tsops,
+-		unsigned, nsops, const struct timespec __user *, timeout)
++		long, nsops, const struct timespec __user *, timeout)
+ {
+ 	int error = -EINVAL;
+ 	struct sem_array *sma;
+@@ -2049,7 +2049,7 @@ SYSCALL_DEFINE4(semtimedop, int, semid, struct sembuf __user *, tsops,
+ }
+
+ SYSCALL_DEFINE3(semop, int, semid, struct sembuf __user *, tsops,
+-		unsigned, nsops)
++		long, nsops)
+ {
+ 	return sys_semtimedop(semid, tsops, nsops, NULL);
+ }
+@@ -2206,7 +2206,8 @@ void exit_sem(struct task_struct *tsk)
+ static int sysvipc_sem_proc_show(struct seq_file *s, void *it)
+ {
+ 	struct user_namespace *user_ns = seq_user_ns(s);
+-	struct sem_array *sma = it;
++	struct kern_ipc_perm *perm = it;
++	struct sem_array *sma = container_of(perm, struct sem_array, sem_perm);
+ 	time_t sem_otime;
+
+ 	/*
+diff --git a/ipc/shm.c b/ipc/shm.c
+index e2072ae..a0da911 100644
+--- a/ipc/shm.c
++++ b/ipc/shm.c
+@@ -72,9 +72,17 @@ static void shm_destroy(struct ipc_namespace *ns, struct shmid_kernel *shp);
+ static int sysvipc_shm_proc_show(struct seq_file *s, void *it);
+ #endif
+
++#ifdef CONFIG_GRKERNSEC
++extern int gr_handle_shmat(const pid_t shm_cprid, const pid_t shm_lapid,
++			   const u64 shm_createtime, const kuid_t cuid,
++			   const int shmid);
++extern int gr_chroot_shmat(const pid_t shm_cprid, const pid_t shm_lapid,
++			   const u64 shm_createtime);
++#endif
++
+ void shm_init_ns(struct ipc_namespace *ns)
+ {
+-	ns->shm_ctlmax = SHMMAX;
++	ns->shm_ctlmax = BITS_PER_LONG == 32 ? SHMMAX : LONG_MAX;
+ 	ns->shm_ctlall = SHMALL;
+ 	ns->shm_ctlmni = SHMMNI;
+ 	ns->shm_rmid_forced = 0;
+@@ -590,6 +598,9 @@ static int newseg(struct ipc_namespace *ns, struct ipc_params *params)
+ 	shp->shm_lprid = 0;
+ 	shp->shm_atim = shp->shm_dtim = 0;
+ 	shp->shm_ctim = get_seconds();
++#ifdef CONFIG_GRKERNSEC
++	shp->shm_createtime = ktime_get_ns();
++#endif
+ 	shp->shm_segsz = size;
+ 	shp->shm_nattch = 0;
+ 	shp->shm_file = file;
+@@ -1138,6 +1149,12 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg,
+ 		f_mode = FMODE_READ | FMODE_WRITE;
+ 	}
+ 	if (shmflg & SHM_EXEC) {
++
++#ifdef CONFIG_PAX_MPROTECT
++		if (current->mm->pax_flags & MF_PAX_MPROTECT)
++			goto out;
++#endif
++
+ 		prot |= PROT_EXEC;
+ 		acc_mode |= S_IXUGO;
+ 	}
+@@ -1162,6 +1179,15 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg,
+ 	if (err)
+ 		goto out_unlock;
+
++#ifdef CONFIG_GRKERNSEC
++	if (!gr_handle_shmat(shp->shm_cprid, shp->shm_lapid, shp->shm_createtime,
++			     shp->shm_perm.cuid, shmid) ||
++	    !gr_chroot_shmat(shp->shm_cprid, shp->shm_lapid, shp->shm_createtime)) {
++		err = -EACCES;
++		goto out_unlock;
++	}
++#endif
++
+ 	ipc_lock_object(&shp->shm_perm);
+
+ 	/* check if shm_destroy() is tearing down shp */
+@@ -1174,6 +1200,9 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg,
+ 	path = shp->shm_file->f_path;
+ 	path_get(&path);
+ 	shp->shm_nattch++;
++#ifdef CONFIG_GRKERNSEC
++	shp->shm_lapid = current->pid;
++#endif
+ 	size = i_size_read(d_inode(path.dentry));
+ 	ipc_unlock_object(&shp->shm_perm);
+ 	rcu_read_unlock();
+@@ -1377,7 +1406,8 @@ SYSCALL_DEFINE1(shmdt, char __user *, shmaddr)
+ static int sysvipc_shm_proc_show(struct seq_file *s, void *it)
+ {
+ 	struct user_namespace *user_ns = seq_user_ns(s);
+-	struct shmid_kernel *shp = it;
++	struct kern_ipc_perm *perm = it;
++	struct shmid_kernel *shp = container_of(perm, struct shmid_kernel, shm_perm);
+ 	unsigned long rss = 0, swp = 0;
+
+ 	shm_add_rss_swap(shp, &rss, &swp);
+diff --git a/ipc/util.c b/ipc/util.c
+index 798cad1..d6ffc17 100644
+--- a/ipc/util.c
++++ b/ipc/util.c
+@@ -71,6 +71,8 @@ struct ipc_proc_iface {
+ 	int (*show)(struct seq_file *, void *);
+ };
+
++extern int gr_ipc_permitted(struct ipc_namespace *ns, struct kern_ipc_perm *ipcp, int requested_mode, int granted_mode);
++
+ /**
+  * ipc_init - initialise ipc subsystem
+  *
+@@ -489,6 +491,10 @@ int ipcperms(struct ipc_namespace *ns, struct kern_ipc_perm *ipcp, short flag)
+ 		granted_mode >>= 6;
+ 	else if (in_group_p(ipcp->cgid) || in_group_p(ipcp->gid))
+ 		granted_mode >>= 3;
++
++	if (!gr_ipc_permitted(ns, ipcp, requested_mode, granted_mode))
++		return -1;
++
+ 	/* is there some bit set in requested_mode but not in granted_mode? */
+ 	if ((requested_mode & ~granted_mode & 0007) &&
+ 	    !ns_capable(ns->user_ns, CAP_IPC_OWNER))

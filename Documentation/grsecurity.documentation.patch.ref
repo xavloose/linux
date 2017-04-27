@@ -1,0 +1,407 @@
+diff --git a/Documentation/dontdiff b/Documentation/dontdiff
+index 5385cba..607c6a0 100644
+--- a/Documentation/dontdiff
++++ b/Documentation/dontdiff
+@@ -7,6 +7,7 @@
+ *.cis
+ *.cpio
+ *.csp
++*.dbg
+ *.dsp
+ *.dvi
+ *.elf
+@@ -16,6 +17,7 @@
+ *.gcov
+ *.gen.S
+ *.gif
++*.gmo
+ *.grep
+ *.grp
+ *.gz
+@@ -52,14 +54,17 @@
+ *.tab.h
+ *.tex
+ *.ver
++*.vim
+ *.xml
+ *.xz
+ *_MODULES
++*_reg_safe.h
+ *_vga16.c
+ *~
+ \#*#
+ *.9
+-.*
++.[^g]*
++.gen*
+ .*.d
+ .mm
+ 53c700_d.h
+@@ -73,9 +78,11 @@ Image
+ Module.markers
+ Module.symvers
+ PENDING
++PERF*
+ SCCS
+ System.map*
+ TAGS
++TRACEEVENT-CFLAGS
+ aconf
+ af_names.h
+ aic7*reg.h*
+@@ -84,6 +91,7 @@ aic7*seq.h*
+ aicasm
+ aicdb.h*
+ altivec*.c
++ashldi3.S
+ asm-offsets.h
+ asm_offsets.h
+ autoconf.h*
+@@ -96,11 +104,14 @@ bounds.h
+ bsetup
+ btfixupprep
+ build
++builtin-policy.h
+ bvmlinux
+ bzImage*
+ capability_names.h
+ capflags.c
+ classlist.h*
++clut_vga16.c
++common-cmds.h
+ comp*.log
+ compile.h*
+ conf
+@@ -109,19 +120,23 @@ config-*
+ config_data.h*
+ config.mak
+ config.mak.autogen
++config.tmp
+ conmakehash
+ consolemap_deftbl.c*
+ cpustr.h
+ crc32table.h*
+ cscope.*
+ defkeymap.c
++devicetable-offsets.h
+ devlist.h*
+ dnotify_test
+ docproc
+ dslm
++dtc-lexer.lex.c
+ elf2ecoff
+ elfconfig.h*
+ evergreen_reg_safe.h
++exception_policy.conf
+ fixdep
+ flask.h
+ fore200e_mkfirm
+@@ -129,12 +144,15 @@ fore200e_pca_fw.c*
+ gconf
+ gconf.glade.h
+ gen-devlist
++gen-kdb_cmds.c
+ gen_crc32table
+ gen_init_cpio
+ generated
+ genheaders
+ genksyms
+ *_gray256.c
++hash
++hid-example
+ hpet_example
+ hugepage-mmap
+ hugepage-shm
+@@ -149,14 +167,14 @@ int32.c
+ int4.c
+ int8.c
+ kallsyms
+-kconfig
++kern_constants.h
+ keywords.c
+ ksym.c*
+ ksym.h*
+ kxgettext
+ lex.c
+ lex.*.c
+-linux
++lib1funcs.S
+ logo_*.c
+ logo_*_clut224.c
+ logo_*_mono.c
+@@ -167,12 +185,14 @@ machtypes.h
+ map
+ map_hugetlb
+ mconf
++mdp
+ miboot*
+ mk_elfconfig
+ mkboot
+ mkbugboot
+ mkcpustr
+ mkdep
++mkpiggy
+ mkprep
+ mkregtable
+ mktables
+@@ -188,6 +208,8 @@ oui.c*
+ page-types
+ parse.c
+ parse.h
++parse-events*
++pasyms.h
+ patches*
+ pca200e.bin
+ pca200e_ecd.bin2
+@@ -197,6 +219,7 @@ perf-archive
+ piggyback
+ piggy.gzip
+ piggy.S
++pmu-*
+ pnmtologo
+ ppc_defs.h*
+ pss_boot.h
+@@ -206,7 +229,12 @@ r200_reg_safe.h
+ r300_reg_safe.h
+ r420_reg_safe.h
+ r600_reg_safe.h
++randomize_layout_hash.h
++randomize_layout_seed.h
++realmode.lds
++realmode.relocs
+ recordmcount
++regdb.c
+ relocs
+ rlim_names.h
+ rn50_reg_safe.h
+@@ -216,8 +244,17 @@ series
+ setup
+ setup.bin
+ setup.elf
++signing_key*
++aux.h
++disable.h
++e_fields.h
++e_fns.h
++e_fptrs.h
++e_vars.h
+ sImage
++slabinfo
+ sm_tbl*
++sortextable
+ split-include
+ syscalltab.h
+ tables.c
+@@ -227,6 +264,7 @@ tftpboot.img
+ timeconst.h
+ times.h*
+ trix_boot.h
++user_constants.h
+ utsrelease.h*
+ vdso-syms.lds
+ vdso.lds
+@@ -238,13 +276,17 @@ vdso32.lds
+ vdso32.so.dbg
+ vdso64.lds
+ vdso64.so.dbg
++vdsox32.lds
++vdsox32-syms.lds
+ version.h*
+ vmImage
+ vmlinux
+ vmlinux-*
+ vmlinux.aout
+ vmlinux.bin.all
++vmlinux.bin.bz2
+ vmlinux.lds
++vmlinux.relocs
+ vmlinuz
+ voffset.h
+ vsyscall.lds
+@@ -252,9 +294,12 @@ vsyscall_32.lds
+ wanxlfw.inc
+ uImage
+ unifdef
++utsrelease.h
+ wakeup.bin
+ wakeup.elf
+ wakeup.lds
++x509*
+ zImage*
+ zconf.hash.c
++zconf.lex.c
+ zoffset.h
+diff --git a/Documentation/kbuild/makefiles.txt b/Documentation/kbuild/makefiles.txt
+index 9b9c479..5a635ff 100644
+--- a/Documentation/kbuild/makefiles.txt
++++ b/Documentation/kbuild/makefiles.txt
+@@ -23,10 +23,11 @@ This document describes the Linux kernel Makefiles.
+ 	=== 4 Host Program support
+ 	   --- 4.1 Simple Host Program
+ 	   --- 4.2 Composite Host Programs
+-	   --- 4.3 Using C++ for host programs
+-	   --- 4.4 Controlling compiler options for host programs
+-	   --- 4.5 When host programs are actually built
+-	   --- 4.6 Using hostprogs-$(CONFIG_FOO)
++	   --- 4.3 Defining shared libraries
++	   --- 4.4 Using C++ for host programs
++	   --- 4.5 Controlling compiler options for host programs
++	   --- 4.6 When host programs are actually built
++	   --- 4.7 Using hostprogs-$(CONFIG_FOO)
+
+ 	=== 5 Kbuild clean infrastructure
+
+@@ -645,7 +646,29 @@ Both possibilities are described in the following.
+ 	Finally, the two .o files are linked to the executable, lxdialog.
+ 	Note: The syntax <executable>-y is not permitted for host-programs.
+
+---- 4.3 Using C++ for host programs
++--- 4.3 Defining shared libraries
++
++	Objects with extension .so are considered shared libraries, and
++	will be compiled as position independent objects.
++	Kbuild provides support for shared libraries, but the usage
++	shall be restricted.
++	In the following example the libkconfig.so shared library is used
++	to link the executable conf.
++
++	Example:
++		#scripts/kconfig/Makefile
++		hostprogs-y     := conf
++		conf-objs       := conf.o libkconfig.so
++		libkconfig-objs := expr.o type.o
++
++	Shared libraries always require a corresponding -objs line, and
++	in the example above the shared library libkconfig is composed by
++	the two objects expr.o and type.o.
++	expr.o and type.o will be built as position independent code and
++	linked as a shared library libkconfig.so. C++ is not supported for
++	shared libraries.
++
++--- 4.4 Using C++ for host programs
+
+ 	kbuild offers support for host programs written in C++. This was
+ 	introduced solely to support kconfig, and is not recommended
+@@ -668,7 +691,7 @@ Both possibilities are described in the following.
+ 		qconf-cxxobjs := qconf.o
+ 		qconf-objs    := check.o
+
+---- 4.4 Controlling compiler options for host programs
++--- 4.5 Controlling compiler options for host programs
+
+ 	When compiling host programs, it is possible to set specific flags.
+ 	The programs will always be compiled utilising $(HOSTCC) passed
+@@ -696,7 +719,7 @@ Both possibilities are described in the following.
+ 	When linking qconf, it will be passed the extra option
+ 	"-L$(QTDIR)/lib".
+
+---- 4.5 When host programs are actually built
++--- 4.6 When host programs are actually built
+
+ 	Kbuild will only build host-programs when they are referenced
+ 	as a prerequisite.
+@@ -727,7 +750,7 @@ Both possibilities are described in the following.
+ 	This will tell kbuild to build lxdialog even if not referenced in
+ 	any rule.
+
+---- 4.6 Using hostprogs-$(CONFIG_FOO)
++--- 4.7 Using hostprogs-$(CONFIG_FOO)
+
+ 	A typical pattern in a Kbuild file looks like this:
+diff --git a/Documentation/kernel-parameters.txt b/Documentation/kernel-parameters.txt
+index a6fadef..fdf6042 100644
+--- a/Documentation/kernel-parameters.txt
++++ b/Documentation/kernel-parameters.txt
+@@ -1436,6 +1436,12 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
+ 			[KNL] Should the hard-lockup detector generate
+ 			backtraces on all cpus.
+ 			Format: <integer>
++	grsec_proc_gid= [GRKERNSEC_PROC_USERGROUP] Chooses GID to
++			ignore grsecurity's /proc restrictions
++
++	grsec_sysfs_restrict= Format: 0 | 1
++			Default: 1
++			Disables GRKERNSEC_SYSFS_RESTRICT if enabled in config
+
+ 	hashdist=	[KNL,NUMA] Large hashes allocated during boot
+ 			are distributed across NUMA nodes.  Defaults on
+@@ -2665,6 +2671,10 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
+ 			noexec=on: enable non-executable mappings (default)
+ 			noexec=off: disable non-executable mappings
+
++	nopcid		[X86-64]
++			Disable PCID (Process-Context IDentifier) even if it
++			is supported by the processor.
++
+ 	nosmap		[X86]
+ 			Disable SMAP (Supervisor Mode Access Prevention)
+ 			even if it is supported by processor.
+@@ -2973,6 +2983,35 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
+ 			the specified number of seconds.  This is to be used if
+ 			your oopses keep scrolling off the screen.
+
++	pax_nouderef	[X86] disables UDEREF.  Most likely needed under certain
++			virtualization environments that don't cope well with the
++			expand down segment used by UDEREF on X86-32 or the frequent
++			page table updates on X86-64.
++
++	pax_sanitize_slab=
++			Format: { 0 | 1 | off | fast | full }
++			Options '0' and '1' are only provided for backward
++			compatibility, 'off' or 'fast' should be used instead.
++			0|off : disable slab object sanitization
++			1|fast: enable slab object sanitization excluding
++				whitelisted slabs (default)
++			full  : sanitize all slabs, even the whitelisted ones
++
++	pax_softmode=	0/1 to disable/enable PaX softmode on boot already.
++
++	pax_extra_latent_entropy
++			Enable a very simple form of latent entropy extraction
++			from the first 4GB of memory as the bootmem allocator
++			passes the memory pages to the buddy allocator.
++
++	pax_size_overflow_report_only
++			Enables rate-limited logging of size_overflow plugin
++			violations while disabling killing of the violating
++			task.
++
++	pax_weakuderef	[X86-64] enables the weaker but faster form of UDEREF
++			when the processor supports PCID.
++
+ 	pcbit=		[HW,ISDN]
+
+ 	pcd.		[PARIDE]
+  diff --git a/Documentation/sysctl/kernel.txt b/Documentation/sysctl/kernel.txt
+  index ffab8b5..b8fcd61 100644
+  --- a/Documentation/sysctl/kernel.txt
+  +++ b/Documentation/sysctl/kernel.txt
+  @@ -42,6 +42,7 @@ show up in /proc/sys/kernel:
+   - kptr_restrict
+   - kstack_depth_to_print       [ X86 only ]
+   - l2cr                        [ PPC only ]
+  +- modify_ldt                  [ X86 only ]
+   - modprobe                    ==> Documentation/debugging-modules.txt
+   - modules_disabled
+   - msg_next_id		      [ sysv ipc ]
+  @@ -409,6 +410,20 @@ This flag controls the L2 cache of G3 processor boards. If
+
+   ==============================================================
+
+  +modify_ldt: (X86 only)
+  +
+  +Enables (1) or disables (0) the modify_ldt syscall. Modifying the LDT
+  +(Local Descriptor Table) may be needed to run a 16-bit or segmented code
+  +such as Dosemu or Wine. This is done via a system call which is not needed
+  +to run portable applications, and which can sometimes be abused to exploit
+  +some weaknesses of the architecture, opening new vulnerabilities.
+  +
+  +This sysctl allows one to increase the system's security by disabling the
+  +system call, or to restore compatibility with specific applications when it
+  +was already disabled.
+  +
+  +==============================================================
+  +
+   modules_disabled:
+
+   A toggle value indicating if modules are allowed to be loaded

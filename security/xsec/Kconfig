@@ -1052,7 +1052,7 @@ endmenu
 
 endmenu
 
-source security/xsec/grsecurity/Kconfig
+source security/xsec/grsecurity.old/Kconfig
 
 endmenu
 

@@ -1,0 +1,195 @@
+diff --git a/crypto/cast6_generic.c b/crypto/cast6_generic.c
+index 058c8d7..55229dd 100644
+--- a/crypto/cast6_generic.c
++++ b/crypto/cast6_generic.c
+@@ -181,8 +181,9 @@ static inline void QBAR(u32 *block, u8 *Kr, u32 *Km)
+ 	block[2] ^= F1(block[3], Kr[0], Km[0]);
+ }
+
+-void __cast6_encrypt(struct cast6_ctx *c, u8 *outbuf, const u8 *inbuf)
++void __cast6_encrypt(void *_c, u8 *outbuf, const u8 *inbuf)
+ {
++	struct cast6_ctx *c = _c;
+ 	const __be32 *src = (const __be32 *)inbuf;
+ 	__be32 *dst = (__be32 *)outbuf;
+ 	u32 block[4];
+@@ -219,8 +220,9 @@ static void cast6_encrypt(struct crypto_tfm *tfm, u8 *outbuf, const u8 *inbuf)
+ 	__cast6_encrypt(crypto_tfm_ctx(tfm), outbuf, inbuf);
+ }
+
+-void __cast6_decrypt(struct cast6_ctx *c, u8 *outbuf, const u8 *inbuf)
++void __cast6_decrypt(void *_c, u8 *outbuf, const u8 *inbuf)
+ {
++	struct cast6_ctx *c = _c;
+ 	const __be32 *src = (const __be32 *)inbuf;
+ 	__be32 *dst = (__be32 *)outbuf;
+ 	u32 block[4];
+diff --git a/crypto/cryptd.c b/crypto/cryptd.c
+index 0c654e5..cf01e3e 100644
+--- a/crypto/cryptd.c
++++ b/crypto/cryptd.c
+@@ -65,7 +65,7 @@ struct cryptd_blkcipher_ctx {
+
+ struct cryptd_blkcipher_request_ctx {
+ 	crypto_completion_t complete;
+-};
++} __no_const;
+
+ struct cryptd_hash_ctx {
+ 	atomic_t refcnt;
+@@ -84,7 +84,7 @@ struct cryptd_aead_ctx {
+
+ struct cryptd_aead_request_ctx {
+ 	crypto_completion_t complete;
+-};
++} __no_const;
+
+ static void cryptd_queue_worker(struct work_struct *work);
+
+diff --git a/crypto/crypto_user.c b/crypto/crypto_user.c
+index 1c57054..e029935 100644
+--- a/crypto/crypto_user.c
++++ b/crypto/crypto_user.c
+@@ -490,7 +490,7 @@ static int crypto_user_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
+ 			dump_alloc += CRYPTO_REPORT_MAXSIZE;
+
+ 		{
+-			struct netlink_dump_control c = {
++			netlink_dump_control_no_const c = {
+ 				.dump = link->dump,
+ 				.done = link->done,
+ 				.min_dump_alloc = dump_alloc,
+diff --git a/crypto/pcrypt.c b/crypto/pcrypt.c
+index ee9cfb9..30b36ed 100644
+--- a/crypto/pcrypt.c
++++ b/crypto/pcrypt.c
+@@ -392,7 +392,7 @@ static int pcrypt_sysfs_add(struct padata_instance *pinst, const char *name)
+ 	int ret;
+
+ 	pinst->kobj.kset = pcrypt_kset;
+-	ret = kobject_add(&pinst->kobj, NULL, name);
++	ret = kobject_add(&pinst->kobj, NULL, "%s", name);
+ 	if (!ret)
+ 		kobject_uevent(&pinst->kobj, KOBJ_ADD);
+
+diff --git a/crypto/salsa20_generic.c b/crypto/salsa20_generic.c
+index f550b5d..8488beb 100644
+--- a/crypto/salsa20_generic.c
++++ b/crypto/salsa20_generic.c
+@@ -104,7 +104,7 @@ static void salsa20_wordtobyte(u8 output[64], const u32 input[16])
+ static const char sigma[16] = "expand 32-byte k";
+ static const char tau[16] = "expand 16-byte k";
+
+-static void salsa20_keysetup(struct salsa20_ctx *ctx, const u8 *k, u32 kbytes)
++static void __salsa20_keysetup(struct salsa20_ctx *ctx, const u8 *k, u32 kbytes)
+ {
+ 	const char *constants;
+
+@@ -128,7 +128,7 @@ static void salsa20_keysetup(struct salsa20_ctx *ctx, const u8 *k, u32 kbytes)
+ 	ctx->input[15] = U8TO32_LITTLE(constants + 12);
+ }
+
+-static void salsa20_ivsetup(struct salsa20_ctx *ctx, const u8 *iv)
++static void __salsa20_ivsetup(struct salsa20_ctx *ctx, const u8 *iv)
+ {
+ 	ctx->input[6] = U8TO32_LITTLE(iv + 0);
+ 	ctx->input[7] = U8TO32_LITTLE(iv + 4);
+@@ -136,7 +136,7 @@ static void salsa20_ivsetup(struct salsa20_ctx *ctx, const u8 *iv)
+ 	ctx->input[9] = 0;
+ }
+
+-static void salsa20_encrypt_bytes(struct salsa20_ctx *ctx, u8 *dst,
++static void __salsa20_encrypt_bytes(struct salsa20_ctx *ctx, u8 *dst,
+ 				  const u8 *src, unsigned int bytes)
+ {
+ 	u8 buf[64];
+@@ -170,7 +170,7 @@ static int setkey(struct crypto_tfm *tfm, const u8 *key,
+ 		  unsigned int keysize)
+ {
+ 	struct salsa20_ctx *ctx = crypto_tfm_ctx(tfm);
+-	salsa20_keysetup(ctx, key, keysize);
++	__salsa20_keysetup(ctx, key, keysize);
+ 	return 0;
+ }
+
+@@ -186,24 +186,24 @@ static int encrypt(struct blkcipher_desc *desc,
+ 	blkcipher_walk_init(&walk, dst, src, nbytes);
+ 	err = blkcipher_walk_virt_block(desc, &walk, 64);
+
+-	salsa20_ivsetup(ctx, walk.iv);
++	__salsa20_ivsetup(ctx, walk.iv);
+
+ 	if (likely(walk.nbytes == nbytes))
+ 	{
+-		salsa20_encrypt_bytes(ctx, walk.dst.virt.addr,
++		__salsa20_encrypt_bytes(ctx, walk.dst.virt.addr,
+ 				      walk.src.virt.addr, nbytes);
+ 		return blkcipher_walk_done(desc, &walk, 0);
+ 	}
+
+ 	while (walk.nbytes >= 64) {
+-		salsa20_encrypt_bytes(ctx, walk.dst.virt.addr,
++		__salsa20_encrypt_bytes(ctx, walk.dst.virt.addr,
+ 				      walk.src.virt.addr,
+ 				      walk.nbytes - (walk.nbytes % 64));
+ 		err = blkcipher_walk_done(desc, &walk, walk.nbytes % 64);
+ 	}
+
+ 	if (walk.nbytes) {
+-		salsa20_encrypt_bytes(ctx, walk.dst.virt.addr,
++		__salsa20_encrypt_bytes(ctx, walk.dst.virt.addr,
+ 				      walk.src.virt.addr, walk.nbytes);
+ 		err = blkcipher_walk_done(desc, &walk, 0);
+ 	}
+diff --git a/crypto/scatterwalk.c b/crypto/scatterwalk.c
+index c16c94f8..8ab5bf8 100644
+--- a/crypto/scatterwalk.c
++++ b/crypto/scatterwalk.c
+@@ -62,14 +62,20 @@ void scatterwalk_map_and_copy(void *buf, struct scatterlist *sg,
+ {
+ 	struct scatter_walk walk;
+ 	struct scatterlist tmp[2];
++	void *realbuf = buf;
+
+ 	if (!nbytes)
+ 		return;
+
+ 	sg = scatterwalk_ffwd(tmp, sg, start);
+
++#ifdef CONFIG_GRKERNSEC_KSTACKOVERFLOW
++	if (object_starts_on_stack(buf))
++		realbuf = buf - current->stack + current->lowmem_stack;
++#endif
++
+ 	scatterwalk_start(&walk, sg);
+-	scatterwalk_copychunks(buf, &walk, nbytes, out);
++	scatterwalk_copychunks(realbuf, &walk, nbytes, out);
+ 	scatterwalk_done(&walk, out, 0);
+ }
+ EXPORT_SYMBOL_GPL(scatterwalk_map_and_copy);
+diff --git a/crypto/serpent_generic.c b/crypto/serpent_generic.c
+index 94970a7..f0c8d26 100644
+--- a/crypto/serpent_generic.c
++++ b/crypto/serpent_generic.c
+@@ -442,8 +442,9 @@ int serpent_setkey(struct crypto_tfm *tfm, const u8 *key, unsigned int keylen)
+ }
+ EXPORT_SYMBOL_GPL(serpent_setkey);
+
+-void __serpent_encrypt(struct serpent_ctx *ctx, u8 *dst, const u8 *src)
++void __serpent_encrypt(void *_ctx, u8 *dst, const u8 *src)
+ {
++	struct serpent_ctx *ctx = _ctx;
+ 	const u32 *k = ctx->expkey;
+ 	const __le32 *s = (const __le32 *)src;
+ 	__le32	*d = (__le32 *)dst;
+@@ -507,8 +508,9 @@ static void serpent_encrypt(struct crypto_tfm *tfm, u8 *dst, const u8 *src)
+ 	__serpent_encrypt(ctx, dst, src);
+ }
+
+-void __serpent_decrypt(struct serpent_ctx *ctx, u8 *dst, const u8 *src)
++void __serpent_decrypt(void *_ctx, u8 *dst, const u8 *src)
+ {
++	struct serpent_ctx *ctx = _ctx;
+ 	const u32 *k = ctx->expkey;
+ 	const __le32 *s = (const __le32 *)src;
+ 	__le32	*d = (__le32 *)dst;

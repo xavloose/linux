@@ -1,0 +1,1337 @@
+diff --git a/sound/aoa/codecs/onyx.c b/sound/aoa/codecs/onyx.c
+index a04edff..6811b91 100644
+--- a/sound/aoa/codecs/onyx.c
++++ b/sound/aoa/codecs/onyx.c
+@@ -54,7 +54,7 @@ struct onyx {
+ 				spdif_locked:1,
+ 				analog_locked:1,
+ 				original_mute:2;
+-	int			open_count;
++	local_t			open_count;
+ 	struct codec_info	*codec_info;
+
+ 	/* mutex serializes concurrent access to the device
+@@ -747,7 +747,7 @@ static int onyx_open(struct codec_info_item *cii,
+ 	struct onyx *onyx = cii->codec_data;
+
+ 	mutex_lock(&onyx->mutex);
+-	onyx->open_count++;
++	local_inc(&onyx->open_count);
+ 	mutex_unlock(&onyx->mutex);
+
+ 	return 0;
+@@ -759,8 +759,7 @@ static int onyx_close(struct codec_info_item *cii,
+ 	struct onyx *onyx = cii->codec_data;
+
+ 	mutex_lock(&onyx->mutex);
+-	onyx->open_count--;
+-	if (!onyx->open_count)
++	if (local_dec_and_test(&onyx->open_count))
+ 		onyx->spdif_locked = onyx->analog_locked = 0;
+ 	mutex_unlock(&onyx->mutex);
+
+diff --git a/sound/aoa/codecs/onyx.h b/sound/aoa/codecs/onyx.h
+index ffd2025..df062c9 100644
+--- a/sound/aoa/codecs/onyx.h
++++ b/sound/aoa/codecs/onyx.h
+@@ -11,6 +11,7 @@
+ #include <linux/i2c.h>
+ #include <asm/pmac_low_i2c.h>
+ #include <asm/prom.h>
++#include <asm/local.h>
+
+ /* PCM3052 register definitions */
+
+diff --git a/sound/core/oss/pcm_oss.c b/sound/core/oss/pcm_oss.c
+index ebc9fdf..61f491e 100644
+--- a/sound/core/oss/pcm_oss.c
++++ b/sound/core/oss/pcm_oss.c
+@@ -1193,10 +1193,10 @@ snd_pcm_sframes_t snd_pcm_oss_write3(struct snd_pcm_substream *substream, const
+ 		if (in_kernel) {
+ 			mm_segment_t fs;
+ 			fs = snd_enter_user();
+-			ret = snd_pcm_lib_write(substream, (void __force __user *)ptr, frames);
++			ret = snd_pcm_lib_write(substream, (void __force_user *)ptr, frames);
+ 			snd_leave_user(fs);
+ 		} else {
+-			ret = snd_pcm_lib_write(substream, (void __force __user *)ptr, frames);
++			ret = snd_pcm_lib_write(substream, (void __force_user *)ptr, frames);
+ 		}
+ 		if (ret != -EPIPE && ret != -ESTRPIPE)
+ 			break;
+@@ -1236,10 +1236,10 @@ snd_pcm_sframes_t snd_pcm_oss_read3(struct snd_pcm_substream *substream, char *p
+ 		if (in_kernel) {
+ 			mm_segment_t fs;
+ 			fs = snd_enter_user();
+-			ret = snd_pcm_lib_read(substream, (void __force __user *)ptr, frames);
++			ret = snd_pcm_lib_read(substream, (void __force_user *)ptr, frames);
+ 			snd_leave_user(fs);
+ 		} else {
+-			ret = snd_pcm_lib_read(substream, (void __force __user *)ptr, frames);
++			ret = snd_pcm_lib_read(substream, (void __force_user *)ptr, frames);
+ 		}
+ 		if (ret == -EPIPE) {
+ 			if (runtime->status->state == SNDRV_PCM_STATE_DRAINING) {
+@@ -1335,7 +1335,7 @@ static ssize_t snd_pcm_oss_write2(struct snd_pcm_substream *substream, const cha
+ 		struct snd_pcm_plugin_channel *channels;
+ 		size_t oss_frame_bytes = (runtime->oss.plugin_first->src_width * runtime->oss.plugin_first->src_format.channels) / 8;
+ 		if (!in_kernel) {
+-			if (copy_from_user(runtime->oss.buffer, (const char __force __user *)buf, bytes))
++			if (copy_from_user(runtime->oss.buffer, (const char __force_user *)buf, bytes))
+ 				return -EFAULT;
+ 			buf = runtime->oss.buffer;
+ 		}
+@@ -1405,7 +1405,7 @@ static ssize_t snd_pcm_oss_write1(struct snd_pcm_substream *substream, const cha
+ 			}
+ 		} else {
+ 			tmp = snd_pcm_oss_write2(substream,
+-						 (const char __force *)buf,
++						 (const char __force_kernel *)buf,
+ 						 runtime->oss.period_bytes, 0);
+ 			if (tmp <= 0)
+ 				goto err;
+@@ -1431,7 +1431,7 @@ static ssize_t snd_pcm_oss_read2(struct snd_pcm_substream *substream, char *buf,
+ 	struct snd_pcm_runtime *runtime = substream->runtime;
+ 	snd_pcm_sframes_t frames, frames1;
+ #ifdef CONFIG_SND_PCM_OSS_PLUGINS
+-	char __user *final_dst = (char __force __user *)buf;
++	char __user *final_dst = (char __force_user *)buf;
+ 	if (runtime->oss.plugin_first) {
+ 		struct snd_pcm_plugin_channel *channels;
+ 		size_t oss_frame_bytes = (runtime->oss.plugin_last->dst_width * runtime->oss.plugin_last->dst_format.channels) / 8;
+@@ -1493,7 +1493,7 @@ static ssize_t snd_pcm_oss_read1(struct snd_pcm_substream *substream, char __use
+ 			xfer += tmp;
+ 			runtime->oss.buffer_used -= tmp;
+ 		} else {
+-			tmp = snd_pcm_oss_read2(substream, (char __force *)buf,
++			tmp = snd_pcm_oss_read2(substream, (char __force_kernel *)buf,
+ 						runtime->oss.period_bytes, 0);
+ 			if (tmp <= 0)
+ 				goto err;
+@@ -1662,7 +1662,7 @@ static int snd_pcm_oss_sync(struct snd_pcm_oss_file *pcm_oss_file)
+ 								   size1);
+ 					size1 /= runtime->channels; /* frames */
+ 					fs = snd_enter_user();
+-					snd_pcm_lib_write(substream, (void __force __user *)runtime->oss.buffer, size1);
++					snd_pcm_lib_write(substream, (void __force_user *)runtime->oss.buffer, size1);
+ 					snd_leave_user(fs);
+ 				}
+ 			} else if (runtime->access == SNDRV_PCM_ACCESS_RW_NONINTERLEAVED) {
+diff --git a/sound/core/pcm_compat.c b/sound/core/pcm_compat.c
+index 1f64ab0..26a7233 100644
+--- a/sound/core/pcm_compat.c
++++ b/sound/core/pcm_compat.c
+@@ -31,7 +31,7 @@ static int snd_pcm_ioctl_delay_compat(struct snd_pcm_substream *substream,
+ 	int err;
+
+ 	fs = snd_enter_user();
+-	err = snd_pcm_delay(substream, &delay);
++	err = snd_pcm_delay(substream, (snd_pcm_sframes_t __force_user *)&delay);
+ 	snd_leave_user(fs);
+ 	if (err < 0)
+ 		return err;
+diff --git a/sound/core/pcm_lib.c b/sound/core/pcm_lib.c
+index bb12615..b5e4ff9 100644
+--- a/sound/core/pcm_lib.c
++++ b/sound/core/pcm_lib.c
+@@ -1867,8 +1867,9 @@ EXPORT_SYMBOL(snd_pcm_lib_ioctl);
+  * Even if more than one periods have elapsed since the last call, you
+  * have to call this only once.
+  */
+-void snd_pcm_period_elapsed(struct snd_pcm_substream *substream)
++void snd_pcm_period_elapsed(void *_substream)
+ {
++	struct snd_pcm_substream *substream = _substream;
+ 	struct snd_pcm_runtime *runtime;
+ 	unsigned long flags;
+
+diff --git a/sound/core/pcm_native.c b/sound/core/pcm_native.c
+index 9d33c1e..23b36d1 100644
+--- a/sound/core/pcm_native.c
++++ b/sound/core/pcm_native.c
+@@ -3016,11 +3016,11 @@ int snd_pcm_kernel_ioctl(struct snd_pcm_substream *substream,
+ 	switch (substream->stream) {
+ 	case SNDRV_PCM_STREAM_PLAYBACK:
+ 		result = snd_pcm_playback_ioctl1(NULL, substream, cmd,
+-						 (void __user *)arg);
++						 (void __force_user *)arg);
+ 		break;
+ 	case SNDRV_PCM_STREAM_CAPTURE:
+ 		result = snd_pcm_capture_ioctl1(NULL, substream, cmd,
+-						(void __user *)arg);
++						(void __force_user *)arg);
+ 		break;
+ 	default:
+ 		result = -EINVAL;
+diff --git a/sound/core/rawmidi.c b/sound/core/rawmidi.c
+index b450a27..28c8238 100644
+--- a/sound/core/rawmidi.c
++++ b/sound/core/rawmidi.c
+@@ -871,9 +871,10 @@ static int snd_rawmidi_control_ioctl(struct snd_card *card,
+  *
+  * Return: The size of read data, or a negative error code on failure.
+  */
+-int snd_rawmidi_receive(struct snd_rawmidi_substream *substream,
+-			const unsigned char *buffer, int count)
++int snd_rawmidi_receive(void *_substream, const void *_buffer, int count)
+ {
++	struct snd_rawmidi_substream *substream = _substream;
++	const unsigned char *buffer = _buffer;
+ 	unsigned long flags;
+ 	int result = 0, count1;
+ 	struct snd_rawmidi_runtime *runtime = substream->runtime;
+diff --git a/sound/core/seq/oss/seq_oss_synth.c b/sound/core/seq/oss/seq_oss_synth.c
+index cd0e0eb..89543da 100644
+--- a/sound/core/seq/oss/seq_oss_synth.c
++++ b/sound/core/seq/oss/seq_oss_synth.c
+@@ -653,8 +653,8 @@ snd_seq_oss_synth_info_read(struct snd_info_buffer *buf)
+ 			    rec->synth_type, rec->synth_subtype,
+ 			    rec->nr_voices);
+ 		snd_iprintf(buf, "  capabilities : ioctl %s / load_patch %s\n",
+-			    enabled_str((long)rec->oper.ioctl),
+-			    enabled_str((long)rec->oper.load_patch));
++			    enabled_str(!!rec->oper.ioctl),
++			    enabled_str(!!rec->oper.load_patch));
+ 		snd_use_lock_free(&rec->use_lock);
+ 	}
+ }
+diff --git a/sound/core/seq/seq_clientmgr.c b/sound/core/seq/seq_clientmgr.c
+index f3b1d7f..6645b81 100644
+--- a/sound/core/seq/seq_clientmgr.c
++++ b/sound/core/seq/seq_clientmgr.c
+@@ -403,7 +403,7 @@ static ssize_t snd_seq_read(struct file *file, char __user *buf, size_t count,
+ 	if (!client->accept_input || (fifo = client->data.user.fifo) == NULL)
+ 		return -ENXIO;
+
+-	if (atomic_read(&fifo->overflow) > 0) {
++	if (atomic_read_unchecked(&fifo->overflow) > 0) {
+ 		/* buffer overflow is detected */
+ 		snd_seq_fifo_clear(fifo);
+ 		/* return error code */
+@@ -433,7 +433,7 @@ static ssize_t snd_seq_read(struct file *file, char __user *buf, size_t count,
+ 			count -= sizeof(struct snd_seq_event);
+ 			buf += sizeof(struct snd_seq_event);
+ 			err = snd_seq_expand_var_event(&cell->event, count,
+-						       (char __force *)buf, 0,
++						       (char __force_kernel *)buf, 0,
+ 						       sizeof(struct snd_seq_event));
+ 			if (err < 0)
+ 				break;
+@@ -1049,13 +1049,13 @@ static ssize_t snd_seq_write(struct file *file, const char __user *buf,
+ 			}
+ 			/* set user space pointer */
+ 			event.data.ext.len = extlen | SNDRV_SEQ_EXT_USRPTR;
+-			event.data.ext.ptr = (char __force *)buf
++			event.data.ext.ptr = (char __force_kernel *)buf
+ 						+ sizeof(struct snd_seq_event);
+ 			len += extlen; /* increment data length */
+ 		} else {
+ #ifdef CONFIG_COMPAT
+ 			if (client->convert32 && snd_seq_ev_is_varusr(&event)) {
+-				void *ptr = (void __force *)compat_ptr(event.data.raw32.d[1]);
++				void *ptr = (void __force_kernel *)compat_ptr(event.data.raw32.d[1]);
+ 				event.data.ext.ptr = ptr;
+ 			}
+ #endif
+diff --git a/sound/core/seq/seq_fifo.c b/sound/core/seq/seq_fifo.c
+index 3490d21..e336d83 100644
+--- a/sound/core/seq/seq_fifo.c
++++ b/sound/core/seq/seq_fifo.c
+@@ -50,7 +50,7 @@ struct snd_seq_fifo *snd_seq_fifo_new(int poolsize)
+ 	spin_lock_init(&f->lock);
+ 	snd_use_lock_init(&f->use_lock);
+ 	init_waitqueue_head(&f->input_sleep);
+-	atomic_set(&f->overflow, 0);
++	atomic_set_unchecked(&f->overflow, 0);
+
+ 	f->head = NULL;
+ 	f->tail = NULL;
+@@ -99,7 +99,7 @@ void snd_seq_fifo_clear(struct snd_seq_fifo *f)
+ 	unsigned long flags;
+
+ 	/* clear overflow flag */
+-	atomic_set(&f->overflow, 0);
++	atomic_set_unchecked(&f->overflow, 0);
+
+ 	snd_use_lock_sync(&f->use_lock);
+ 	spin_lock_irqsave(&f->lock, flags);
+@@ -126,7 +126,7 @@ int snd_seq_fifo_event_in(struct snd_seq_fifo *f,
+ 	err = snd_seq_event_dup(f->pool, event, &cell, 1, NULL); /* always non-blocking */
+ 	if (err < 0) {
+ 		if ((err == -ENOMEM) || (err == -EAGAIN))
+-			atomic_inc(&f->overflow);
++			atomic_inc_unchecked(&f->overflow);
+ 		snd_use_lock_free(&f->use_lock);
+ 		return err;
+ 	}
+diff --git a/sound/core/seq/seq_fifo.h b/sound/core/seq/seq_fifo.h
+index 062c446..a4b6f4c 100644
+--- a/sound/core/seq/seq_fifo.h
++++ b/sound/core/seq/seq_fifo.h
+@@ -35,7 +35,7 @@ struct snd_seq_fifo {
+ 	spinlock_t lock;
+ 	snd_use_lock_t use_lock;
+ 	wait_queue_head_t input_sleep;
+-	atomic_t overflow;
++	atomic_unchecked_t overflow;
+
+ };
+
+diff --git a/sound/core/seq/seq_memory.c b/sound/core/seq/seq_memory.c
+index 5847c44..cfec4ed 100644
+--- a/sound/core/seq/seq_memory.c
++++ b/sound/core/seq/seq_memory.c
+@@ -87,7 +87,7 @@ int snd_seq_dump_var_event(const struct snd_seq_event *event,
+
+ 	if (event->data.ext.len & SNDRV_SEQ_EXT_USRPTR) {
+ 		char buf[32];
+-		char __user *curptr = (char __force __user *)event->data.ext.ptr;
++		char __user *curptr = (char __force_user *)event->data.ext.ptr;
+ 		while (len > 0) {
+ 			int size = sizeof(buf);
+ 			if (len < size)
+@@ -126,15 +126,19 @@ EXPORT_SYMBOL(snd_seq_dump_var_event);
+  * expand the variable length event to linear buffer space.
+  */
+
+-static int seq_copy_in_kernel(char **bufptr, const void *src, int size)
++static int seq_copy_in_kernel(void *_bufptr, const void *src, int size)
+ {
++	char **bufptr = (char **)_bufptr;
++
+ 	memcpy(*bufptr, src, size);
+ 	*bufptr += size;
+ 	return 0;
+ }
+
+-static int seq_copy_in_user(char __user **bufptr, const void *src, int size)
++static int seq_copy_in_user(void *_bufptr, const void *src, int size)
+ {
++	char __user **bufptr = (char __user **)_bufptr;
++
+ 	if (copy_to_user(*bufptr, src, size))
+ 		return -EFAULT;
+ 	*bufptr += size;
+@@ -158,13 +162,13 @@ int snd_seq_expand_var_event(const struct snd_seq_event *event, int count, char
+ 	if (event->data.ext.len & SNDRV_SEQ_EXT_USRPTR) {
+ 		if (! in_kernel)
+ 			return -EINVAL;
+-		if (copy_from_user(buf, (void __force __user *)event->data.ext.ptr, len))
++		if (copy_from_user(buf, (void __force_user *)event->data.ext.ptr, len))
+ 			return -EFAULT;
+ 		return newlen;
+ 	}
+ 	err = snd_seq_dump_var_event(event,
+-				     in_kernel ? (snd_seq_dump_func_t)seq_copy_in_kernel :
+-				     (snd_seq_dump_func_t)seq_copy_in_user,
++				     in_kernel ? seq_copy_in_kernel :
++				     seq_copy_in_user,
+ 				     &buf);
+ 	return err < 0 ? err : newlen;
+ }
+@@ -344,7 +348,7 @@ int snd_seq_event_dup(struct snd_seq_pool *pool, struct snd_seq_event *event,
+ 				tmp->event = src->event;
+ 				src = src->next;
+ 			} else if (is_usrptr) {
+-				if (copy_from_user(&tmp->event, (char __force __user *)buf, size)) {
++				if (copy_from_user(&tmp->event, (char __force_user *)buf, size)) {
+ 					err = -EFAULT;
+ 					goto __error;
+ 				}
+diff --git a/sound/core/seq/seq_midi.c b/sound/core/seq/seq_midi.c
+index 5dd0ee2..0208e35 100644
+--- a/sound/core/seq/seq_midi.c
++++ b/sound/core/seq/seq_midi.c
+@@ -111,8 +111,9 @@ static void snd_midi_input_event(struct snd_rawmidi_substream *substream)
+ 	}
+ }
+
+-static int dump_midi(struct snd_rawmidi_substream *substream, const char *buf, int count)
++static int dump_midi(void *_substream, const void *buf, int count)
+ {
++	struct snd_rawmidi_substream *substream = _substream;
+ 	struct snd_rawmidi_runtime *runtime;
+ 	int tmp;
+
+@@ -148,7 +149,7 @@ static int event_process_midi(struct snd_seq_event *ev, int direct,
+ 			pr_debug("ALSA: seq_midi: invalid sysex event flags = 0x%x\n", ev->flags);
+ 			return 0;
+ 		}
+-		snd_seq_dump_var_event(ev, (snd_seq_dump_func_t)dump_midi, substream);
++		snd_seq_dump_var_event(ev, dump_midi, substream);
+ 		snd_midi_event_reset_decode(msynth->parser);
+ 	} else {
+ 		if (msynth->parser == NULL)
+diff --git a/sound/core/seq/seq_virmidi.c b/sound/core/seq/seq_virmidi.c
+index c82ed3e..e11d039 100644
+--- a/sound/core/seq/seq_virmidi.c
++++ b/sound/core/seq/seq_virmidi.c
+@@ -90,7 +90,7 @@ static int snd_virmidi_dev_receive_event(struct snd_virmidi_dev *rdev,
+ 		if (ev->type == SNDRV_SEQ_EVENT_SYSEX) {
+ 			if ((ev->flags & SNDRV_SEQ_EVENT_LENGTH_MASK) != SNDRV_SEQ_EVENT_LENGTH_VARIABLE)
+ 				continue;
+-			snd_seq_dump_var_event(ev, (snd_seq_dump_func_t)snd_rawmidi_receive, vmidi->substream);
++			snd_seq_dump_var_event(ev, snd_rawmidi_receive, vmidi->substream);
+ 		} else {
+ 			len = snd_midi_event_decode(vmidi->parser, msg, sizeof(msg), ev);
+ 			if (len > 0)
+diff --git a/sound/core/sound.c b/sound/core/sound.c
+index 175f9e4..3518d31 100644
+--- a/sound/core/sound.c
++++ b/sound/core/sound.c
+@@ -86,7 +86,7 @@ static void snd_request_other(int minor)
+ 	case SNDRV_MINOR_TIMER:		str = "snd-timer";	break;
+ 	default:			return;
+ 	}
+-	request_module(str);
++	request_module("%s", str);
+ }
+
+ #endif	/* modular kernel */
+diff --git a/sound/drivers/mts64.c b/sound/drivers/mts64.c
+index fd4d18d..235097d 100644
+--- a/sound/drivers/mts64.c
++++ b/sound/drivers/mts64.c
+@@ -29,6 +29,7 @@
+ #include <sound/initval.h>
+ #include <sound/rawmidi.h>
+ #include <sound/control.h>
++#include <asm/local.h>
+
+ #define CARD_NAME "Miditerminal 4140"
+ #define DRIVER_NAME "MTS64"
+@@ -65,7 +66,7 @@ struct mts64 {
+ 	struct snd_card *card;
+ 	struct snd_rawmidi *rmidi;
+ 	struct pardevice *pardev;
+-	int open_count;
++	local_t open_count;
+ 	int current_midi_output_port;
+ 	int current_midi_input_port;
+ 	u8 mode[MTS64_NUM_INPUT_PORTS];
+@@ -685,7 +686,7 @@ static int snd_mts64_rawmidi_open(struct snd_rawmidi_substream *substream)
+ {
+ 	struct mts64 *mts = substream->rmidi->private_data;
+
+-	if (mts->open_count == 0) {
++	if (local_read(&mts->open_count) == 0) {
+ 		/* We don't need a spinlock here, because this is just called
+ 		   if the device has not been opened before.
+ 		   So there aren't any IRQs from the device */
+@@ -693,7 +694,7 @@ static int snd_mts64_rawmidi_open(struct snd_rawmidi_substream *substream)
+
+ 		msleep(50);
+ 	}
+-	++(mts->open_count);
++	local_inc(&mts->open_count);
+
+ 	return 0;
+ }
+@@ -703,8 +704,7 @@ static int snd_mts64_rawmidi_close(struct snd_rawmidi_substream *substream)
+ 	struct mts64 *mts = substream->rmidi->private_data;
+ 	unsigned long flags;
+
+-	--(mts->open_count);
+-	if (mts->open_count == 0) {
++	if (local_dec_return(&mts->open_count) == 0) {
+ 		/* We need the spinlock_irqsave here because we can still
+ 		   have IRQs at this point */
+ 		spin_lock_irqsave(&mts->lock, flags);
+@@ -713,8 +713,8 @@ static int snd_mts64_rawmidi_close(struct snd_rawmidi_substream *substream)
+
+ 		msleep(500);
+
+-	} else if (mts->open_count < 0)
+-		mts->open_count = 0;
++	} else if (local_read(&mts->open_count) < 0)
++		local_set(&mts->open_count, 0);
+
+ 	return 0;
+ }
+diff --git a/sound/drivers/opl4/opl4_lib.c b/sound/drivers/opl4/opl4_lib.c
+index 89c7aa0..6d75e49 100644
+--- a/sound/drivers/opl4/opl4_lib.c
++++ b/sound/drivers/opl4/opl4_lib.c
+@@ -29,7 +29,7 @@ MODULE_AUTHOR("Clemens Ladisch <clemens@ladisch.de>");
+ MODULE_DESCRIPTION("OPL4 driver");
+ MODULE_LICENSE("GPL");
+
+-static void inline snd_opl4_wait(struct snd_opl4 *opl4)
++static inline void snd_opl4_wait(struct snd_opl4 *opl4)
+ {
+ 	int timeout = 10;
+ 	while ((inb(opl4->fm_port) & OPL4_STATUS_BUSY) && --timeout > 0)
+diff --git a/sound/drivers/portman2x4.c b/sound/drivers/portman2x4.c
+index 189e3e7..a873a71 100644
+--- a/sound/drivers/portman2x4.c
++++ b/sound/drivers/portman2x4.c
+@@ -48,6 +48,7 @@
+ #include <sound/initval.h>
+ #include <sound/rawmidi.h>
+ #include <sound/control.h>
++#include <asm/local.h>
+
+ #define CARD_NAME "Portman 2x4"
+ #define DRIVER_NAME "portman"
+@@ -83,7 +84,7 @@ struct portman {
+ 	struct snd_card *card;
+ 	struct snd_rawmidi *rmidi;
+ 	struct pardevice *pardev;
+-	int open_count;
++	local_t open_count;
+ 	int mode[PORTMAN_NUM_INPUT_PORTS];
+ 	struct snd_rawmidi_substream *midi_input[PORTMAN_NUM_INPUT_PORTS];
+ };
+diff --git a/sound/firewire/amdtp-am824.c b/sound/firewire/amdtp-am824.c
+index bebddc6..f5976be 100644
+--- a/sound/firewire/amdtp-am824.c
++++ b/sound/firewire/amdtp-am824.c
+@@ -314,7 +314,7 @@ void amdtp_am824_midi_trigger(struct amdtp_stream *s, unsigned int port,
+ 	struct amdtp_am824 *p = s->protocol;
+
+ 	if (port < p->midi_ports)
+-		ACCESS_ONCE(p->midi[port]) = midi;
++		ACCESS_ONCE_RW(p->midi[port]) = midi;
+ }
+ EXPORT_SYMBOL_GPL(amdtp_am824_midi_trigger);
+
+diff --git a/sound/firewire/amdtp-stream.c b/sound/firewire/amdtp-stream.c
+index 00060c4..9ba6f37 100644
+--- a/sound/firewire/amdtp-stream.c
++++ b/sound/firewire/amdtp-stream.c
+@@ -350,7 +350,7 @@ static void update_pcm_pointers(struct amdtp_stream *s,
+ 	ptr = s->pcm_buffer_pointer + frames;
+ 	if (ptr >= pcm->runtime->buffer_size)
+ 		ptr -= pcm->runtime->buffer_size;
+-	ACCESS_ONCE(s->pcm_buffer_pointer) = ptr;
++	ACCESS_ONCE_RW(s->pcm_buffer_pointer) = ptr;
+
+ 	s->pcm_period_pointer += frames;
+ 	if (s->pcm_period_pointer >= pcm->runtime->period_size) {
+@@ -833,7 +833,7 @@ EXPORT_SYMBOL(amdtp_stream_pcm_pointer);
+ void amdtp_stream_update(struct amdtp_stream *s)
+ {
+ 	/* Precomputing. */
+-	ACCESS_ONCE(s->source_node_id_field) =
++	ACCESS_ONCE_RW(s->source_node_id_field) =
+ 		(fw_parent_device(s->unit)->card->node_id << CIP_SID_SHIFT) &
+ 								CIP_SID_MASK;
+ }
+diff --git a/sound/firewire/amdtp-stream.h b/sound/firewire/amdtp-stream.h
+index c1bc7fa..40d7cbc 100644
+--- a/sound/firewire/amdtp-stream.h
++++ b/sound/firewire/amdtp-stream.h
+@@ -207,7 +207,7 @@ static inline bool amdtp_stream_pcm_running(struct amdtp_stream *s)
+ static inline void amdtp_stream_pcm_trigger(struct amdtp_stream *s,
+ 					    struct snd_pcm_substream *pcm)
+ {
+-	ACCESS_ONCE(s->pcm) = pcm;
++	ACCESS_ONCE_RW(s->pcm) = pcm;
+ }
+
+ static inline bool cip_sfc_is_base_44100(enum cip_sfc sfc)
+diff --git a/sound/firewire/digi00x/amdtp-dot.c b/sound/firewire/digi00x/amdtp-dot.c
+index b3cffd0..f17b591 100644
+--- a/sound/firewire/digi00x/amdtp-dot.c
++++ b/sound/firewire/digi00x/amdtp-dot.c
+@@ -365,7 +365,7 @@ void amdtp_dot_midi_trigger(struct amdtp_stream *s, unsigned int port,
+ 	struct amdtp_dot *p = s->protocol;
+
+ 	if (port < p->midi_ports)
+-		ACCESS_ONCE(p->midi[port]) = midi;
++		ACCESS_ONCE_RW(p->midi[port]) = midi;
+ }
+
+ static unsigned int process_tx_data_blocks(struct amdtp_stream *s,
+diff --git a/sound/firewire/isight.c b/sound/firewire/isight.c
+index 48d6dca..a0266c23 100644
+--- a/sound/firewire/isight.c
++++ b/sound/firewire/isight.c
+@@ -96,7 +96,7 @@ static void isight_update_pointers(struct isight *isight, unsigned int count)
+ 	ptr += count;
+ 	if (ptr >= runtime->buffer_size)
+ 		ptr -= runtime->buffer_size;
+-	ACCESS_ONCE(isight->buffer_pointer) = ptr;
++	ACCESS_ONCE_RW(isight->buffer_pointer) = ptr;
+
+ 	isight->period_counter += count;
+ 	if (isight->period_counter >= runtime->period_size) {
+@@ -293,7 +293,7 @@ static int isight_hw_params(struct snd_pcm_substream *substream,
+ 	if (err < 0)
+ 		return err;
+
+-	ACCESS_ONCE(isight->pcm_active) = true;
++	ACCESS_ONCE_RW(isight->pcm_active) = true;
+
+ 	return 0;
+ }
+@@ -331,7 +331,7 @@ static int isight_hw_free(struct snd_pcm_substream *substream)
+ {
+ 	struct isight *isight = substream->private_data;
+
+-	ACCESS_ONCE(isight->pcm_active) = false;
++	ACCESS_ONCE_RW(isight->pcm_active) = false;
+
+ 	mutex_lock(&isight->mutex);
+ 	isight_stop_streaming(isight);
+@@ -424,10 +424,10 @@ static int isight_trigger(struct snd_pcm_substream *substream, int cmd)
+
+ 	switch (cmd) {
+ 	case SNDRV_PCM_TRIGGER_START:
+-		ACCESS_ONCE(isight->pcm_running) = true;
++		ACCESS_ONCE_RW(isight->pcm_running) = true;
+ 		break;
+ 	case SNDRV_PCM_TRIGGER_STOP:
+-		ACCESS_ONCE(isight->pcm_running) = false;
++		ACCESS_ONCE_RW(isight->pcm_running) = false;
+ 		break;
+ 	default:
+ 		return -EINVAL;
+diff --git a/sound/firewire/oxfw/oxfw-scs1x.c b/sound/firewire/oxfw/oxfw-scs1x.c
+index f897c98..4f9a70d 100644
+--- a/sound/firewire/oxfw/oxfw-scs1x.c
++++ b/sound/firewire/oxfw/oxfw-scs1x.c
+@@ -291,9 +291,9 @@ static void midi_capture_trigger(struct snd_rawmidi_substream *stream, int up)
+
+ 	if (up) {
+ 		scs->input_escape_count = 0;
+-		ACCESS_ONCE(scs->input) = stream;
++		ACCESS_ONCE_RW(scs->input) = stream;
+ 	} else {
+-		ACCESS_ONCE(scs->input) = NULL;
++		ACCESS_ONCE_RW(scs->input) = NULL;
+ 	}
+ }
+
+@@ -325,10 +325,10 @@ static void midi_playback_trigger(struct snd_rawmidi_substream *stream, int up)
+ 		scs->transaction_bytes = 0;
+ 		scs->error = false;
+
+-		ACCESS_ONCE(scs->output) = stream;
++		ACCESS_ONCE_RW(scs->output) = stream;
+ 		schedule_work(&scs->work);
+ 	} else {
+-		ACCESS_ONCE(scs->output) = NULL;
++		ACCESS_ONCE_RW(scs->output) = NULL;
+ 	}
+ }
+ static void midi_playback_drain(struct snd_rawmidi_substream *stream)
+diff --git a/sound/oss/sb_audio.c b/sound/oss/sb_audio.c
+index dc91072..d85a10a 100644
+--- a/sound/oss/sb_audio.c
++++ b/sound/oss/sb_audio.c
+@@ -900,7 +900,7 @@ sb16_copy_from_user(int dev,
+ 		buf16 = (signed short *)(localbuf + localoffs);
+ 		while (c)
+ 		{
+-			locallen = (c >= LBUFCOPYSIZE ? LBUFCOPYSIZE : c);
++			locallen = ((unsigned)c >= LBUFCOPYSIZE ? LBUFCOPYSIZE : c);
+ 			if (copy_from_user(lbuf8,
+ 					   userbuf+useroffs + p,
+ 					   locallen))
+diff --git a/sound/oss/swarm_cs4297a.c b/sound/oss/swarm_cs4297a.c
+index 213a416..aeab5c9 100644
+--- a/sound/oss/swarm_cs4297a.c
++++ b/sound/oss/swarm_cs4297a.c
+@@ -2623,7 +2623,6 @@ static int __init cs4297a_init(void)
+ {
+ 	struct cs4297a_state *s;
+ 	u32 pwr, id;
+-	mm_segment_t fs;
+ 	int rval;
+ 	u64 cfg;
+ 	int mdio_val;
+@@ -2709,22 +2708,23 @@ static int __init cs4297a_init(void)
+         if (!rval) {
+ 		char *sb1250_duart_present;
+
++#if 0
++                mm_segment_t fs;
+                 fs = get_fs();
+                 set_fs(KERNEL_DS);
+-#if 0
+                 val = SOUND_MASK_LINE;
+                 mixer_ioctl(s, SOUND_MIXER_WRITE_RECSRC, (unsigned long) &val);
+                 for (i = 0; i < ARRAY_SIZE(initvol); i++) {
+                         val = initvol[i].vol;
+                         mixer_ioctl(s, initvol[i].mixch, (unsigned long) &val);
+                 }
++                set_fs(fs);
+ //                cs4297a_write_ac97(s, 0x18, 0x0808);
+ #else
+                 //                cs4297a_write_ac97(s, 0x5e, 0x180);
+                 cs4297a_write_ac97(s, 0x02, 0x0808);
+                 cs4297a_write_ac97(s, 0x18, 0x0808);
+ #endif
+-                set_fs(fs);
+
+                 list_add(&s->list, &cs4297a_devs);
+
+diff --git a/sound/pci/als300.c b/sound/pci/als300.c
+index ab75601..28b3423 100644
+--- a/sound/pci/als300.c
++++ b/sound/pci/als300.c
+@@ -647,7 +647,7 @@ static int snd_als300_create(struct snd_card *card,
+ 			     struct snd_als300 **rchip)
+ {
+ 	struct snd_als300 *chip;
+-	void *irq_handler;
++	irq_handler_t irq_handler;
+ 	int err;
+
+ 	static struct snd_device_ops ops = {
+diff --git a/sound/pci/aw2/aw2-alsa.c b/sound/pci/aw2/aw2-alsa.c
+index 57bbb87..5873521 100644
+--- a/sound/pci/aw2/aw2-alsa.c
++++ b/sound/pci/aw2/aw2-alsa.c
+@@ -458,7 +458,6 @@ static int snd_aw2_pcm_prepare_playback(struct snd_pcm_substream *substream)
+
+ 	/* Define Interrupt callback */
+ 	snd_aw2_saa7146_define_it_playback_callback(pcm_device->stream_number,
+-						    (snd_aw2_saa7146_it_cb)
+ 						    snd_pcm_period_elapsed,
+ 						    (void *)substream);
+
+@@ -487,7 +486,6 @@ static int snd_aw2_pcm_prepare_capture(struct snd_pcm_substream *substream)
+
+ 	/* Define Interrupt callback */
+ 	snd_aw2_saa7146_define_it_capture_callback(pcm_device->stream_number,
+-						   (snd_aw2_saa7146_it_cb)
+ 						   snd_pcm_period_elapsed,
+ 						   (void *)substream);
+
+diff --git a/sound/pci/aw2/aw2-saa7146.c b/sound/pci/aw2/aw2-saa7146.c
+index 1d78904..d9c1056 100644
+--- a/sound/pci/aw2/aw2-saa7146.c
++++ b/sound/pci/aw2/aw2-saa7146.c
+@@ -262,7 +262,7 @@ void snd_aw2_saa7146_define_it_playback_callback(unsigned int stream_number,
+ {
+ 	if (stream_number < NB_STREAM_PLAYBACK) {
+ 		arr_substream_it_playback_cb[stream_number].p_it_callback =
+-		    (snd_aw2_saa7146_it_cb) p_it_callback;
++		    p_it_callback;
+ 		arr_substream_it_playback_cb[stream_number].p_callback_param =
+ 		    (void *)p_callback_param;
+ 	}
+@@ -275,7 +275,7 @@ void snd_aw2_saa7146_define_it_capture_callback(unsigned int stream_number,
+ {
+ 	if (stream_number < NB_STREAM_CAPTURE) {
+ 		arr_substream_it_capture_cb[stream_number].p_it_callback =
+-		    (snd_aw2_saa7146_it_cb) p_it_callback;
++		    p_it_callback;
+ 		arr_substream_it_capture_cb[stream_number].p_callback_param =
+ 		    (void *)p_callback_param;
+ 	}
+diff --git a/sound/pci/ctxfi/ctamixer.c b/sound/pci/ctxfi/ctamixer.c
+index 5fcbb06..f4b85df 100644
+--- a/sound/pci/ctxfi/ctamixer.c
++++ b/sound/pci/ctxfi/ctamixer.c
+@@ -297,8 +297,9 @@ static int put_amixer_rsc(struct amixer_mgr *mgr, struct amixer *amixer)
+ 	return 0;
+ }
+
+-int amixer_mgr_create(struct hw *hw, struct amixer_mgr **ramixer_mgr)
++int amixer_mgr_create(struct hw *hw, void **_ramixer_mgr)
+ {
++	struct amixer_mgr **ramixer_mgr = (struct amixer_mgr **)_ramixer_mgr;
+ 	int err;
+ 	struct amixer_mgr *amixer_mgr;
+
+@@ -326,8 +327,10 @@ int amixer_mgr_create(struct hw *hw, struct amixer_mgr **ramixer_mgr)
+ 	return err;
+ }
+
+-int amixer_mgr_destroy(struct amixer_mgr *amixer_mgr)
++int amixer_mgr_destroy(void *_amixer_mgr)
+ {
++	struct amixer_mgr *amixer_mgr = _amixer_mgr;
++
+ 	rsc_mgr_uninit(&amixer_mgr->mgr);
+ 	kfree(amixer_mgr);
+ 	return 0;
+@@ -452,8 +455,9 @@ static int put_sum_rsc(struct sum_mgr *mgr, struct sum *sum)
+ 	return 0;
+ }
+
+-int sum_mgr_create(struct hw *hw, struct sum_mgr **rsum_mgr)
++int sum_mgr_create(struct hw *hw, void **_rsum_mgr)
+ {
++	struct sum_mgr **rsum_mgr = (struct sum_mgr **)_rsum_mgr;
+ 	int err;
+ 	struct sum_mgr *sum_mgr;
+
+@@ -481,8 +485,10 @@ int sum_mgr_create(struct hw *hw, struct sum_mgr **rsum_mgr)
+ 	return err;
+ }
+
+-int sum_mgr_destroy(struct sum_mgr *sum_mgr)
++int sum_mgr_destroy(void *_sum_mgr)
+ {
++	struct sum_mgr *sum_mgr = _sum_mgr;
++
+ 	rsc_mgr_uninit(&sum_mgr->mgr);
+ 	kfree(sum_mgr);
+ 	return 0;
+diff --git a/sound/pci/ctxfi/ctamixer.h b/sound/pci/ctxfi/ctamixer.h
+index 2de18aa..2fbd01b 100644
+--- a/sound/pci/ctxfi/ctamixer.h
++++ b/sound/pci/ctxfi/ctamixer.h
+@@ -47,8 +47,8 @@ struct sum_mgr {
+ };
+
+ /* Constructor and destructor of daio resource manager */
+-int sum_mgr_create(struct hw *hw, struct sum_mgr **rsum_mgr);
+-int sum_mgr_destroy(struct sum_mgr *sum_mgr);
++int sum_mgr_create(struct hw *hw, void **rsum_mgr);
++int sum_mgr_destroy(void *sum_mgr);
+
+ /* Define the descriptor of a amixer resource */
+ struct amixer_rsc_ops;
+@@ -93,7 +93,7 @@ struct amixer_mgr {
+ };
+
+ /* Constructor and destructor of amixer resource manager */
+-int amixer_mgr_create(struct hw *hw, struct amixer_mgr **ramixer_mgr);
+-int amixer_mgr_destroy(struct amixer_mgr *amixer_mgr);
++int amixer_mgr_create(struct hw *hw, void **ramixer_mgr);
++int amixer_mgr_destroy(void *amixer_mgr);
+
+ #endif /* CTAMIXER_H */
+diff --git a/sound/pci/ctxfi/ctatc.c b/sound/pci/ctxfi/ctatc.c
+index 908658a..5d1726c 100644
+--- a/sound/pci/ctxfi/ctatc.c
++++ b/sound/pci/ctxfi/ctatc.c
+@@ -113,16 +113,16 @@ static struct {
+ 	int (*create)(struct hw *hw, void **rmgr);
+ 	int (*destroy)(void *mgr);
+ } rsc_mgr_funcs[NUM_RSCTYP] = {
+-	[SRC] 		= { .create 	= (create_t)src_mgr_create,
+-			    .destroy 	= (destroy_t)src_mgr_destroy	},
+-	[SRCIMP] 	= { .create 	= (create_t)srcimp_mgr_create,
+-			    .destroy 	= (destroy_t)srcimp_mgr_destroy	},
+-	[AMIXER]	= { .create	= (create_t)amixer_mgr_create,
+-			    .destroy	= (destroy_t)amixer_mgr_destroy	},
+-	[SUM]		= { .create	= (create_t)sum_mgr_create,
+-			    .destroy	= (destroy_t)sum_mgr_destroy	},
+-	[DAIO]		= { .create	= (create_t)daio_mgr_create,
+-			    .destroy	= (destroy_t)daio_mgr_destroy	}
++	[SRC] 		= { .create 	= src_mgr_create,
++			    .destroy 	= src_mgr_destroy	},
++	[SRCIMP] 	= { .create 	= srcimp_mgr_create,
++			    .destroy 	= srcimp_mgr_destroy	},
++	[AMIXER]	= { .create	= amixer_mgr_create,
++			    .destroy	= amixer_mgr_destroy	},
++	[SUM]		= { .create	= sum_mgr_create,
++			    .destroy	= sum_mgr_destroy	},
++	[DAIO]		= { .create	= daio_mgr_create,
++			    .destroy	= daio_mgr_destroy	}
+ };
+
+ static int
+diff --git a/sound/pci/ctxfi/ctdaio.c b/sound/pci/ctxfi/ctdaio.c
+index 7f089cb..6bea28e 100644
+--- a/sound/pci/ctxfi/ctdaio.c
++++ b/sound/pci/ctxfi/ctdaio.c
+@@ -687,8 +687,9 @@ static int daio_mgr_commit_write(struct daio_mgr *mgr)
+ 	return 0;
+ }
+
+-int daio_mgr_create(struct hw *hw, struct daio_mgr **rdaio_mgr)
++int daio_mgr_create(struct hw *hw, void **_rdaio_mgr)
+ {
++	struct daio_mgr **rdaio_mgr = (struct daio_mgr **)_rdaio_mgr;
+ 	int err, i;
+ 	struct daio_mgr *daio_mgr;
+ 	struct imapper *entry;
+@@ -741,8 +742,9 @@ int daio_mgr_create(struct hw *hw, struct daio_mgr **rdaio_mgr)
+ 	return err;
+ }
+
+-int daio_mgr_destroy(struct daio_mgr *daio_mgr)
++int daio_mgr_destroy(void *_daio_mgr)
+ {
++	struct daio_mgr *daio_mgr = _daio_mgr;
+ 	unsigned long flags;
+
+ 	/* free daio input mapper list */
+diff --git a/sound/pci/ctxfi/ctdaio.h b/sound/pci/ctxfi/ctdaio.h
+index a30be73..91b8dbd 100644
+--- a/sound/pci/ctxfi/ctdaio.h
++++ b/sound/pci/ctxfi/ctdaio.h
+@@ -119,7 +119,7 @@ struct daio_mgr {
+ };
+
+ /* Constructor and destructor of daio resource manager */
+-int daio_mgr_create(struct hw *hw, struct daio_mgr **rdaio_mgr);
+-int daio_mgr_destroy(struct daio_mgr *daio_mgr);
++int daio_mgr_create(struct hw *hw, void **rdaio_mgr);
++int daio_mgr_destroy(void *daio_mgr);
+
+ #endif /* CTDAIO_H */
+diff --git a/sound/pci/ctxfi/ctsrc.c b/sound/pci/ctxfi/ctsrc.c
+index a5a72df..f86edb8 100644
+--- a/sound/pci/ctxfi/ctsrc.c
++++ b/sound/pci/ctxfi/ctsrc.c
+@@ -544,8 +544,9 @@ static int src_mgr_commit_write(struct src_mgr *mgr)
+ 	return 0;
+ }
+
+-int src_mgr_create(struct hw *hw, struct src_mgr **rsrc_mgr)
++int src_mgr_create(struct hw *hw, void **_rsrc_mgr)
+ {
++	struct src_mgr **rsrc_mgr = (struct src_mgr **)_rsrc_mgr;
+ 	int err, i;
+ 	struct src_mgr *src_mgr;
+
+@@ -584,8 +585,10 @@ int src_mgr_create(struct hw *hw, struct src_mgr **rsrc_mgr)
+ 	return err;
+ }
+
+-int src_mgr_destroy(struct src_mgr *src_mgr)
++int src_mgr_destroy(void *_src_mgr)
+ {
++	struct src_mgr *src_mgr = _src_mgr;
++
+ 	rsc_mgr_uninit(&src_mgr->mgr);
+ 	kfree(src_mgr);
+
+@@ -828,8 +831,9 @@ static int srcimp_imap_delete(struct srcimp_mgr *mgr, struct imapper *entry)
+ 	return err;
+ }
+
+-int srcimp_mgr_create(struct hw *hw, struct srcimp_mgr **rsrcimp_mgr)
++int srcimp_mgr_create(struct hw *hw, void **_rsrcimp_mgr)
+ {
++	struct srcimp_mgr **rsrcimp_mgr = (struct srcimp_mgr **)_rsrcimp_mgr;
+ 	int err;
+ 	struct srcimp_mgr *srcimp_mgr;
+ 	struct imapper *entry;
+@@ -873,8 +877,9 @@ int srcimp_mgr_create(struct hw *hw, struct srcimp_mgr **rsrcimp_mgr)
+ 	return err;
+ }
+
+-int srcimp_mgr_destroy(struct srcimp_mgr *srcimp_mgr)
++int srcimp_mgr_destroy(void *_srcimp_mgr)
+ {
++	struct srcimp_mgr *srcimp_mgr = _srcimp_mgr;
+ 	unsigned long flags;
+
+ 	/* free src input mapper list */
+diff --git a/sound/pci/ctxfi/ctsrc.h b/sound/pci/ctxfi/ctsrc.h
+index 92944a0..fc78ed4 100644
+--- a/sound/pci/ctxfi/ctsrc.h
++++ b/sound/pci/ctxfi/ctsrc.h
+@@ -143,10 +143,10 @@ struct srcimp_mgr {
+ };
+
+ /* Constructor and destructor of SRC resource manager */
+-int src_mgr_create(struct hw *hw, struct src_mgr **rsrc_mgr);
+-int src_mgr_destroy(struct src_mgr *src_mgr);
++int src_mgr_create(struct hw *hw, void **rsrc_mgr);
++int src_mgr_destroy(void *src_mgr);
+ /* Constructor and destructor of SRCIMP resource manager */
+-int srcimp_mgr_create(struct hw *hw, struct srcimp_mgr **rsrc_mgr);
+-int srcimp_mgr_destroy(struct srcimp_mgr *srcimp_mgr);
++int srcimp_mgr_create(struct hw *hw, void **rsrc_mgr);
++int srcimp_mgr_destroy(void *srcimp_mgr);
+
+ #endif /* CTSRC_H */
+diff --git a/sound/pci/hda/hda_codec.c b/sound/pci/hda/hda_codec.c
+index 9913be8..381d325 100644
+--- a/sound/pci/hda/hda_codec.c
++++ b/sound/pci/hda/hda_codec.c
+@@ -1743,7 +1743,7 @@ static int get_kctl_0dB_offset(struct hda_codec *codec,
+ 		/* FIXME: set_fs() hack for obtaining user-space TLV data */
+ 		mm_segment_t fs = get_fs();
+ 		set_fs(get_ds());
+-		if (!kctl->tlv.c(kctl, 0, sizeof(_tlv), _tlv))
++		if (!kctl->tlv.c(kctl, 0, sizeof(_tlv), (unsigned int __force_user *)_tlv))
+ 			tlv = _tlv;
+ 		set_fs(fs);
+ 	} else if (kctl->vd[0].access & SNDRV_CTL_ELEM_ACCESS_TLV_READ)
+diff --git a/sound/pci/ymfpci/ymfpci.h b/sound/pci/ymfpci/ymfpci.h
+index 149d4cb..7784769 100644
+--- a/sound/pci/ymfpci/ymfpci.h
++++ b/sound/pci/ymfpci/ymfpci.h
+@@ -358,7 +358,7 @@ struct snd_ymfpci {
+ 	spinlock_t reg_lock;
+ 	spinlock_t voice_lock;
+ 	wait_queue_head_t interrupt_sleep;
+-	atomic_t interrupt_sleep_count;
++	atomic_unchecked_t interrupt_sleep_count;
+ 	struct snd_info_entry *proc_entry;
+ 	const struct firmware *dsp_microcode;
+ 	const struct firmware *controller_microcode;
+diff --git a/sound/pci/ymfpci/ymfpci_main.c b/sound/pci/ymfpci/ymfpci_main.c
+index ffee284..c23cee1 100644
+--- a/sound/pci/ymfpci/ymfpci_main.c
++++ b/sound/pci/ymfpci/ymfpci_main.c
+@@ -204,8 +204,8 @@ static void snd_ymfpci_hw_stop(struct snd_ymfpci *chip)
+ 		if ((snd_ymfpci_readl(chip, YDSXGR_STATUS) & 2) == 0)
+ 			break;
+ 	}
+-	if (atomic_read(&chip->interrupt_sleep_count)) {
+-		atomic_set(&chip->interrupt_sleep_count, 0);
++	if (atomic_read_unchecked(&chip->interrupt_sleep_count)) {
++		atomic_set_unchecked(&chip->interrupt_sleep_count, 0);
+ 		wake_up(&chip->interrupt_sleep);
+ 	}
+       __end:
+@@ -789,7 +789,7 @@ static void snd_ymfpci_irq_wait(struct snd_ymfpci *chip)
+ 		 	continue;
+ 		init_waitqueue_entry(&wait, current);
+ 		add_wait_queue(&chip->interrupt_sleep, &wait);
+-		atomic_inc(&chip->interrupt_sleep_count);
++		atomic_inc_unchecked(&chip->interrupt_sleep_count);
+ 		schedule_timeout_uninterruptible(msecs_to_jiffies(50));
+ 		remove_wait_queue(&chip->interrupt_sleep, &wait);
+ 	}
+@@ -827,8 +827,8 @@ static irqreturn_t snd_ymfpci_interrupt(int irq, void *dev_id)
+ 		snd_ymfpci_writel(chip, YDSXGR_MODE, mode);
+ 		spin_unlock(&chip->reg_lock);
+
+-		if (atomic_read(&chip->interrupt_sleep_count)) {
+-			atomic_set(&chip->interrupt_sleep_count, 0);
++		if (atomic_read_unchecked(&chip->interrupt_sleep_count)) {
++			atomic_set_unchecked(&chip->interrupt_sleep_count, 0);
+ 			wake_up(&chip->interrupt_sleep);
+ 		}
+ 	}
+@@ -2384,7 +2384,7 @@ int snd_ymfpci_create(struct snd_card *card,
+ 	spin_lock_init(&chip->reg_lock);
+ 	spin_lock_init(&chip->voice_lock);
+ 	init_waitqueue_head(&chip->interrupt_sleep);
+-	atomic_set(&chip->interrupt_sleep_count, 0);
++	atomic_set_unchecked(&chip->interrupt_sleep_count, 0);
+ 	chip->card = card;
+ 	chip->pci = pci;
+ 	chip->irq = -1;
+diff --git a/sound/soc/codecs/arizona.c b/sound/soc/codecs/arizona.c
+index 846ca07..57fa515 100644
+--- a/sound/soc/codecs/arizona.c
++++ b/sound/soc/codecs/arizona.c
+@@ -2606,7 +2606,9 @@ int arizona_register_notifier(struct snd_soc_codec *codec,
+ 	struct arizona_priv *priv = snd_soc_codec_get_drvdata(codec);
+ 	struct arizona *arizona = priv->arizona;
+
+-	nb->notifier_call = notify;
++	pax_open_kernel();
++	const_cast(nb->notifier_call) = notify;
++	pax_close_kernel();
+
+ 	return blocking_notifier_chain_register(&arizona->notifier, nb);
+ }
+diff --git a/sound/soc/codecs/cx20442.c b/sound/soc/codecs/cx20442.c
+index 2c12471..31dd766 100644
+--- a/sound/soc/codecs/cx20442.c
++++ b/sound/soc/codecs/cx20442.c
+@@ -264,6 +264,12 @@ static int v253_hangup(struct tty_struct *tty)
+ 	return 0;
+ }
+
++static int v253_hw_write(void *client, const char *buf, int count)
++{
++	struct tty_struct *tty = client;
++	return tty->ops->write(client, buf, count);
++}
++
+ /* Line discipline .receive_buf() */
+ static void v253_receive(struct tty_struct *tty,
+ 				const unsigned char *cp, char *fp, int count)
+@@ -281,7 +287,7 @@ static void v253_receive(struct tty_struct *tty,
+
+ 		/* Set up codec driver access to modem controls */
+ 		cx20442->control_data = tty;
+-		codec->hw_write = (hw_write_t)tty->ops->write;
++		codec->hw_write = v253_hw_write;
+ 		codec->component.card->pop_time = 1;
+ 	}
+ }
+diff --git a/sound/soc/codecs/sti-sas.c b/sound/soc/codecs/sti-sas.c
+index d6e00c7..4b64c8a 100644
+--- a/sound/soc/codecs/sti-sas.c
++++ b/sound/soc/codecs/sti-sas.c
+@@ -591,11 +591,13 @@ static int sti_sas_driver_probe(struct platform_device *pdev)
+ 	sti_sas_dai[STI_SAS_DAI_ANALOG_OUT].ops = drvdata->dev_data->dac_ops;
+
+ 	/* Set dapms*/
+-	sti_sas_driver.component_driver.dapm_widgets = drvdata->dev_data->dapm_widgets;
+-	sti_sas_driver.component_driver.num_dapm_widgets = drvdata->dev_data->num_dapm_widgets;
++	pax_open_kernel();
++	const_cast(sti_sas_driver.component_driver.dapm_widgets) = drvdata->dev_data->dapm_widgets;
++	const_cast(sti_sas_driver.component_driver.num_dapm_widgets) = drvdata->dev_data->num_dapm_widgets;
+
+-	sti_sas_driver.component_driver.dapm_routes = drvdata->dev_data->dapm_routes;
+-	sti_sas_driver.component_driver.num_dapm_routes = drvdata->dev_data->num_dapm_routes;
++	const_cast(sti_sas_driver.component_driver.dapm_routes) = drvdata->dev_data->dapm_routes;
++	const_cast(sti_sas_driver.component_driver.num_dapm_routes) = drvdata->dev_data->num_dapm_routes;
++	pax_close_kernel();
+
+ 	/* Store context */
+ 	dev_set_drvdata(&pdev->dev, drvdata);
+diff --git a/sound/soc/codecs/tlv320dac33.c b/sound/soc/codecs/tlv320dac33.c
+index 7bcf01e..ca7af11 100644
+--- a/sound/soc/codecs/tlv320dac33.c
++++ b/sound/soc/codecs/tlv320dac33.c
+@@ -1374,13 +1374,18 @@ static int dac33_set_dai_fmt(struct snd_soc_dai *codec_dai,
+ 	return 0;
+ }
+
++static int dac33_hw_write(void *client, const char *buf, int count)
++{
++	return i2c_master_send(client, buf, count);
++}
++
+ static int dac33_soc_probe(struct snd_soc_codec *codec)
+ {
+ 	struct tlv320dac33_priv *dac33 = snd_soc_codec_get_drvdata(codec);
+ 	int ret = 0;
+
+ 	codec->control_data = dac33->control_data;
+-	codec->hw_write = (hw_write_t) i2c_master_send;
++	codec->hw_write = dac33_hw_write;
+ 	dac33->codec = codec;
+
+ 	/* Read the tlv320dac33 ID registers */
+diff --git a/sound/soc/codecs/uda1380.c b/sound/soc/codecs/uda1380.c
+index 533e3bb..7f69a52 100644
+--- a/sound/soc/codecs/uda1380.c
++++ b/sound/soc/codecs/uda1380.c
+@@ -687,6 +687,11 @@ static struct snd_soc_dai_driver uda1380_dai[] = {
+ },
+ };
+
++static int uda1380_hw_write(void *client, const char *buf, int count)
++{
++	return i2c_master_send(client, buf, count);
++}
++
+ static int uda1380_probe(struct snd_soc_codec *codec)
+ {
+ 	struct uda1380_platform_data *pdata =codec->dev->platform_data;
+@@ -695,7 +700,7 @@ static int uda1380_probe(struct snd_soc_codec *codec)
+
+ 	uda1380->codec = codec;
+
+-	codec->hw_write = (hw_write_t)i2c_master_send;
++	codec->hw_write = uda1380_hw_write;
+ 	codec->control_data = uda1380->control_data;
+
+ 	if (!pdata)
+diff --git a/sound/soc/intel/skylake/skl-sst-dsp.h b/sound/soc/intel/skylake/skl-sst-dsp.h
+index b9e71d0..7d187d6 100644
+--- a/sound/soc/intel/skylake/skl-sst-dsp.h
++++ b/sound/soc/intel/skylake/skl-sst-dsp.h
+@@ -143,7 +143,7 @@ struct skl_dsp_fw_ops {
+ 	int (*load_mod)(struct sst_dsp *ctx, u16 mod_id, u8 *mod_name);
+ 	int (*unload_mod)(struct sst_dsp *ctx, u16 mod_id);
+
+-};
++} __no_const;
+
+ struct skl_dsp_loader_ops {
+ 	int stream_tag;
+diff --git a/sound/soc/soc-ac97.c b/sound/soc/soc-ac97.c
+index 6c8b0b0..2c4a5c6 100644
+--- a/sound/soc/soc-ac97.c
++++ b/sound/soc/soc-ac97.c
+@@ -414,8 +414,10 @@ int snd_soc_set_ac97_ops_of_reset(struct snd_ac97_bus_ops *ops,
+ 	if (ret)
+ 		return ret;
+
+-	ops->warm_reset = snd_soc_ac97_warm_reset;
+-	ops->reset = snd_soc_ac97_reset;
++	pax_open_kernel();
++	const_cast(ops->warm_reset) = snd_soc_ac97_warm_reset;
++	const_cast(ops->reset) = snd_soc_ac97_reset;
++	pax_close_kernel();
+
+ 	snd_ac97_rst_cfg = cfg;
+ 	return 0;
+diff --git a/sound/soc/xtensa/xtfpga-i2s.c b/sound/soc/xtensa/xtfpga-i2s.c
+index 8382ffa..86af7d0 100644
+--- a/sound/soc/xtensa/xtfpga-i2s.c
++++ b/sound/soc/xtensa/xtfpga-i2s.c
+@@ -437,7 +437,7 @@ static int xtfpga_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
+ 	case SNDRV_PCM_TRIGGER_START:
+ 	case SNDRV_PCM_TRIGGER_RESUME:
+ 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+-		ACCESS_ONCE(i2s->tx_ptr) = 0;
++		ACCESS_ONCE_RW(i2s->tx_ptr) = 0;
+ 		rcu_assign_pointer(i2s->tx_substream, substream);
+ 		xtfpga_pcm_refill_fifo(i2s);
+ 		break;
+diff --git a/sound/synth/emux/emux_seq.c b/sound/synth/emux/emux_seq.c
+index a020920..55579f6 100644
+--- a/sound/synth/emux/emux_seq.c
++++ b/sound/synth/emux/emux_seq.c
+@@ -33,13 +33,13 @@ static int snd_emux_unuse(void *private_data, struct snd_seq_port_subscribe *inf
+  * MIDI emulation operators
+  */
+ static struct snd_midi_op emux_ops = {
+-	snd_emux_note_on,
+-	snd_emux_note_off,
+-	snd_emux_key_press,
+-	snd_emux_terminate_note,
+-	snd_emux_control,
+-	snd_emux_nrpn,
+-	snd_emux_sysex,
++	.note_on = snd_emux_note_on,
++	.note_off = snd_emux_note_off,
++	.key_press = snd_emux_key_press,
++	.note_terminate = snd_emux_terminate_note,
++	.control = snd_emux_control,
++	.nrpn = snd_emux_nrpn,
++	.sysex = snd_emux_sysex,
+ };
+
+
+diff --git a/sound/usb/line6/driver.c b/sound/usb/line6/driver.c
+index ab3c280..e5cb292 100644
+--- a/sound/usb/line6/driver.c
++++ b/sound/usb/line6/driver.c
+@@ -337,7 +337,7 @@ int line6_read_data(struct usb_line6 *line6, unsigned address, void *data,
+ {
+ 	struct usb_device *usbdev = line6->usbdev;
+ 	int ret;
+-	unsigned char len;
++	unsigned char *plen;
+ 	unsigned count;
+
+ 	if (address > 0xffff || datalen > 0xff)
+@@ -354,6 +354,10 @@ int line6_read_data(struct usb_line6 *line6, unsigned address, void *data,
+ 		return ret;
+ 	}
+
++	plen = kmalloc(1, GFP_KERNEL);
++	if (plen == NULL)
++		return -ENOMEM;
++
+ 	/* Wait for data length. We'll get 0xff until length arrives. */
+ 	for (count = 0; count < LINE6_READ_WRITE_MAX_RETRIES; count++) {
+ 		mdelay(LINE6_READ_WRITE_STATUS_DELAY);
+@@ -361,30 +365,35 @@ int line6_read_data(struct usb_line6 *line6, unsigned address, void *data,
+ 		ret = usb_control_msg(usbdev, usb_rcvctrlpipe(usbdev, 0), 0x67,
+ 				      USB_TYPE_VENDOR | USB_RECIP_DEVICE |
+ 				      USB_DIR_IN,
+-				      0x0012, 0x0000, &len, 1,
++				      0x0012, 0x0000, plen, 1,
+ 				      LINE6_TIMEOUT * HZ);
+ 		if (ret < 0) {
+ 			dev_err(line6->ifcdev,
+ 				"receive length failed (error %d)\n", ret);
++			kfree(plen);
+ 			return ret;
+ 		}
+
+-		if (len != 0xff)
++		if (*plen != 0xff)
+ 			break;
+ 	}
+
+-	if (len == 0xff) {
++	if (*plen == 0xff) {
+ 		dev_err(line6->ifcdev, "read failed after %d retries\n",
+ 			count);
++		kfree(plen);
+ 		return -EIO;
+-	} else if (len != datalen) {
++	} else if (*plen != datalen) {
+ 		/* should be equal or something went wrong */
+ 		dev_err(line6->ifcdev,
+ 			"length mismatch (expected %d, got %d)\n",
+-			(int)datalen, (int)len);
++			(int)datalen, (int)*plen);
++		kfree(plen);
+ 		return -EIO;
+ 	}
+
++	kfree(plen);
++
+ 	/* receive the result: */
+ 	ret = usb_control_msg(usbdev, usb_rcvctrlpipe(usbdev, 0), 0x67,
+ 			      USB_TYPE_VENDOR | USB_RECIP_DEVICE | USB_DIR_IN,
+@@ -408,7 +417,7 @@ int line6_write_data(struct usb_line6 *line6, unsigned address, void *data,
+ {
+ 	struct usb_device *usbdev = line6->usbdev;
+ 	int ret;
+-	unsigned char status;
++	unsigned char *status;
+ 	int count;
+
+ 	if (address > 0xffff || datalen > 0xffff)
+@@ -425,6 +434,10 @@ int line6_write_data(struct usb_line6 *line6, unsigned address, void *data,
+ 		return ret;
+ 	}
+
++	status = kmalloc(1, GFP_KERNEL);
++	if (status == NULL)
++		return -ENOMEM;
++
+ 	for (count = 0; count < LINE6_READ_WRITE_MAX_RETRIES; count++) {
+ 		mdelay(LINE6_READ_WRITE_STATUS_DELAY);
+
+@@ -433,27 +446,32 @@ int line6_write_data(struct usb_line6 *line6, unsigned address, void *data,
+ 				      USB_TYPE_VENDOR | USB_RECIP_DEVICE |
+ 				      USB_DIR_IN,
+ 				      0x0012, 0x0000,
+-				      &status, 1, LINE6_TIMEOUT * HZ);
++				      status, 1, LINE6_TIMEOUT * HZ);
+
+ 		if (ret < 0) {
+ 			dev_err(line6->ifcdev,
+ 				"receiving status failed (error %d)\n", ret);
++			kfree(status);
+ 			return ret;
+ 		}
+
+-		if (status != 0xff)
++		if (*status != 0xff)
+ 			break;
+ 	}
+
+-	if (status == 0xff) {
++	if (*status == 0xff) {
+ 		dev_err(line6->ifcdev, "write failed after %d retries\n",
+ 			count);
++		kfree(status);
+ 		return -EIO;
+-	} else if (status != 0) {
++	} else if (*status != 0) {
+ 		dev_err(line6->ifcdev, "write failed (error %d)\n", ret);
++		kfree(status);
+ 		return -EIO;
+ 	}
+
++	kfree(status);
++
+ 	return 0;
+ }
+ EXPORT_SYMBOL_GPL(line6_write_data);
+diff --git a/sound/usb/line6/toneport.c b/sound/usb/line6/toneport.c
+index 8e22f43..2f5e18c 100644
+--- a/sound/usb/line6/toneport.c
++++ b/sound/usb/line6/toneport.c
+@@ -367,13 +367,19 @@ static bool toneport_has_source_select(struct usb_line6_toneport *toneport)
+ */
+ static void toneport_setup(struct usb_line6_toneport *toneport)
+ {
+-	int ticks;
++	int *ticks;
+ 	struct usb_line6 *line6 = &toneport->line6;
+ 	struct usb_device *usbdev = line6->usbdev;
+
++	ticks = kmalloc(sizeof(int), GFP_KERNEL);
++	if (ticks == NULL)
++		return;
++
+ 	/* sync time on device with host: */
+-	ticks = (int)get_seconds();
+-	line6_write_data(line6, 0x80c6, &ticks, 4);
++	*ticks = (int)get_seconds();
++	line6_write_data(line6, 0x80c6, ticks, sizeof(int));
++
++	kfree(ticks);
+
+ 	/* enable device: */
+ 	toneport_send_cmd(usbdev, 0x0301, 0x0000);

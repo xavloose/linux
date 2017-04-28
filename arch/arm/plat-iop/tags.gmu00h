@@ -1,0 +1,83 @@
+IRQ_DMA0_EOT	adma.c	26;"	d	file:
+IRQ_DMA0_EOC	adma.c	27;"	d	file:
+IRQ_DMA0_ERR	adma.c	28;"	d	file:
+IRQ_DMA1_EOT	adma.c	30;"	d	file:
+IRQ_DMA1_EOC	adma.c	31;"	d	file:
+IRQ_DMA1_ERR	adma.c	32;"	d	file:
+IRQ_AA_EOT	adma.c	34;"	d	file:
+IRQ_AA_EOC	adma.c	35;"	d	file:
+IRQ_AA_ERR	adma.c	36;"	d	file:
+IRQ_DMA0_EOT	adma.c	39;"	d	file:
+IRQ_DMA0_EOC	adma.c	40;"	d	file:
+IRQ_DMA0_ERR	adma.c	41;"	d	file:
+IRQ_DMA1_EOT	adma.c	43;"	d	file:
+IRQ_DMA1_EOC	adma.c	44;"	d	file:
+IRQ_DMA1_ERR	adma.c	45;"	d	file:
+IRQ_AA_EOT	adma.c	47;"	d	file:
+IRQ_AA_EOC	adma.c	48;"	d	file:
+IRQ_AA_ERR	adma.c	49;"	d	file:
+iop3xx_dma_0_resources	adma.c	/^static struct resource iop3xx_dma_0_resources[] = {$/;"	v	typeref:struct:resource	file:
+iop3xx_dma_1_resources	adma.c	/^static struct resource iop3xx_dma_1_resources[] = {$/;"	v	typeref:struct:resource	file:
+iop3xx_aau_resources	adma.c	/^static struct resource iop3xx_aau_resources[] = {$/;"	v	typeref:struct:resource	file:
+iop3xx_adma_dmamask	adma.c	/^static u64 iop3xx_adma_dmamask = DMA_BIT_MASK(32);$/;"	v	file:
+iop3xx_dma_0_data	adma.c	/^static struct iop_adma_platform_data iop3xx_dma_0_data = {$/;"	v	typeref:struct:iop_adma_platform_data	file:
+iop3xx_dma_1_data	adma.c	/^static struct iop_adma_platform_data iop3xx_dma_1_data = {$/;"	v	typeref:struct:iop_adma_platform_data	file:
+iop3xx_aau_data	adma.c	/^static struct iop_adma_platform_data iop3xx_aau_data = {$/;"	v	typeref:struct:iop_adma_platform_data	file:
+iop3xx_dma_0_channel	adma.c	/^struct platform_device iop3xx_dma_0_channel = {$/;"	v	typeref:struct:platform_device
+iop3xx_dma_1_channel	adma.c	/^struct platform_device iop3xx_dma_1_channel = {$/;"	v	typeref:struct:platform_device
+iop3xx_aau_channel	adma.c	/^struct platform_device iop3xx_aau_channel = {$/;"	v	typeref:struct:platform_device
+iop3xx_adma_cap_init	adma.c	/^static int __init iop3xx_adma_cap_init(void)$/;"	f	file:
+iop3xx_adma_cap_init	adma.c	/^arch_initcall(iop3xx_adma_cap_init);$/;"	v
+cp6_trap	cp6.c	/^static int cp6_trap(struct pt_regs *regs, unsigned int instr)$/;"	f	file:
+cp6_hook	cp6.c	/^static struct undef_hook cp6_hook = {$/;"	v	typeref:struct:undef_hook	file:
+iop_init_cp6_handler	cp6.c	/^void __init iop_init_cp6_handler(void)$/;"	f
+IRQ_IOP3XX_I2C_0	i2c.c	32;"	d	file:
+IRQ_IOP3XX_I2C_1	i2c.c	33;"	d	file:
+IRQ_IOP3XX_I2C_0	i2c.c	36;"	d	file:
+IRQ_IOP3XX_I2C_1	i2c.c	37;"	d	file:
+iop3xx_i2c0_resources	i2c.c	/^static struct resource iop3xx_i2c0_resources[] = {$/;"	v	typeref:struct:resource	file:
+iop3xx_i2c0_device	i2c.c	/^struct platform_device iop3xx_i2c0_device = {$/;"	v	typeref:struct:platform_device
+iop3xx_i2c1_resources	i2c.c	/^static struct resource iop3xx_i2c1_resources[] = {$/;"	v	typeref:struct:resource	file:
+iop3xx_i2c1_device	i2c.c	/^struct platform_device iop3xx_i2c1_device = {$/;"	v	typeref:struct:platform_device
+DBG	pci.c	30;"	d	file:
+DBG	pci.c	32;"	d	file:
+iop3xx_cfg_address	pci.c	/^static u32 iop3xx_cfg_address(struct pci_bus *bus, int devfn, int where)$/;"	f	file:
+iop3xx_pci_status	pci.c	/^static int iop3xx_pci_status(void)$/;"	f	file:
+iop3xx_read	pci.c	/^static u32 iop3xx_read(unsigned long addr)$/;"	f	file:
+iop3xx_read_config	pci.c	/^iop3xx_read_config(struct pci_bus *bus, unsigned int devfn, int where,$/;"	f	file:
+iop3xx_write_config	pci.c	/^iop3xx_write_config(struct pci_bus *bus, unsigned int devfn, int where,$/;"	f	file:
+iop3xx_ops	pci.c	/^struct pci_ops iop3xx_ops = {$/;"	v	typeref:struct:pci_ops
+iop3xx_pci_abort	pci.c	/^iop3xx_pci_abort(unsigned long addr, unsigned int fsr, struct pt_regs *regs)$/;"	f	file:
+iop3xx_pci_setup	pci.c	/^int iop3xx_pci_setup(int nr, struct pci_sys_data *sys)$/;"	f
+iop3xx_atu_setup	pci.c	/^void __init iop3xx_atu_setup(void)$/;"	f
+iop3xx_atu_disable	pci.c	/^void __init iop3xx_atu_disable(void)$/;"	f
+init_atu	pci.c	/^int init_atu;$/;"	v
+iop3xx_get_init_atu	pci.c	/^int iop3xx_get_init_atu(void) {$/;"	f
+iop3xx_atu_debug	pci.c	/^static void __init iop3xx_atu_debug(void)$/;"	f	file:
+iop3xx_pci_preinit_cond	pci.c	/^void __init iop3xx_pci_preinit_cond(void)$/;"	f
+iop3xx_pci_preinit	pci.c	/^void __init iop3xx_pci_preinit(void)$/;"	f
+iop3xx_init_atu_setup	pci.c	/^static int __init iop3xx_init_atu_setup(char *str)$/;"	f	file:
+pmu_resource	pmu.c	/^static struct resource pmu_resource = {$/;"	v	typeref:struct:resource	file:
+pmu_device	pmu.c	/^static struct platform_device pmu_device = {$/;"	v	typeref:struct:platform_device	file:
+iop3xx_pmu_init	pmu.c	/^static int __init iop3xx_pmu_init(void)$/;"	f	file:
+iop3xx_pmu_init	pmu.c	/^arch_initcall(iop3xx_pmu_init);$/;"	v
+iop3xx_restart	restart.c	/^void iop3xx_restart(enum reboot_mode mode, const char *cmd)$/;"	f
+__initdata	setup.c	/^static struct map_desc iop3xx_std_desc[] __initdata = {$/;"	v	typeref:struct:iop3xx_std_desc	file:
+iop3xx_map_io	setup.c	/^void __init iop3xx_map_io(void)$/;"	f
+IOP_MIN_RANGE	time.c	36;"	d	file:
+iop_clocksource_read	time.c	/^static u64 notrace iop_clocksource_read(struct clocksource *unused)$/;"	f	file:
+iop_clocksource	time.c	/^static struct clocksource iop_clocksource = {$/;"	v	typeref:struct:clocksource	file:
+iop_read_sched_clock	time.c	/^static u64 notrace iop_read_sched_clock(void)$/;"	f	file:
+iop_set_next_event	time.c	/^static int iop_set_next_event(unsigned long delta,$/;"	f	file:
+ticks_per_jiffy	time.c	/^static unsigned long ticks_per_jiffy;$/;"	v	file:
+iop_set_periodic	time.c	/^static int iop_set_periodic(struct clock_event_device *evt)$/;"	f	file:
+iop_set_oneshot	time.c	/^static int iop_set_oneshot(struct clock_event_device *evt)$/;"	f	file:
+iop_shutdown	time.c	/^static int iop_shutdown(struct clock_event_device *evt)$/;"	f	file:
+iop_resume	time.c	/^static int iop_resume(struct clock_event_device *evt)$/;"	f	file:
+iop_clockevent	time.c	/^static struct clock_event_device iop_clockevent = {$/;"	v	typeref:struct:clock_event_device	file:
+iop_timer_interrupt	time.c	/^iop_timer_interrupt(int irq, void *dev_id)$/;"	f	file:
+iop_timer_irq	time.c	/^static struct irqaction iop_timer_irq = {$/;"	v	typeref:struct:irqaction	file:
+iop_tick_rate	time.c	/^static unsigned long iop_tick_rate;$/;"	v	file:
+get_iop_tick_rate	time.c	/^unsigned long get_iop_tick_rate(void)$/;"	f
+get_iop_tick_rate	time.c	/^EXPORT_SYMBOL(get_iop_tick_rate);$/;"	v
+iop_init_time	time.c	/^void __init iop_init_time(unsigned long tick_rate)$/;"	f

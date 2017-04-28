@@ -6,8 +6,8 @@ I'll set up a link to such once I finished the port :)
 
 ### Support Xsec [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=NFPU6CRVSAES2&lc=US&item_name=xsec&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donate_SM%2egif%3aNonHosted)
 
-### What I Have Done
-## On The Last Patch
+## What I Have Done
+### On The Last Patch
 Broken up the patch into one directory deep levels. I'll slowly elminate them when I don't need them anymore
 Current Patches:
  - Documentation/grsecurity.documentation.patch.ref
@@ -31,7 +31,7 @@ Current Patches:
  - virt/grsecurity.virt.patch.ref
  - grsecrity.root.patch.ref                            Working on...
  - grsecurity-3.1-4.9.24-201704252333.patch.ref        The reference patch
-## My changes/planned changes
+### My changes/planned changes
  - change instances of grsecurity and grsec to xsec and gr instances to x
  - move the grsecurity root folder to /security/xsec and renamed files according to above
  - Make all of grsecurity's uncondiontional changes linked to Kconfig

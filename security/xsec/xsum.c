@@ -4,7 +4,7 @@
 #include <linux/mm.h>
 #include <linux/scatterlist.h>
 #include <linux/crypto.h>
-#include <linux/gracl.h>
+#include <linux/xacl.h>
 #include <crypto/algapi.h>
 #include <crypto/hash.h>
 
@@ -13,12 +13,12 @@
 #endif
 
 int
-chkpw(struct gr_arg *entry, unsigned char *salt, unsigned char *sum)
+chkpw(struct x_arg *entry, unsigned char *salt, unsigned char *sum)
 {
 	struct crypto_ahash *tfm;
 	struct ahash_request *req;
 	struct scatterlist sg[2];
-	unsigned char temp_sum[GR_SHA_LEN];
+	unsigned char temp_sum[X_SHA_LEN];
 	unsigned long *tmpsumptr = (unsigned long *)temp_sum;
 	unsigned long *sumptr = (unsigned long *)sum;
 	int retval = 1;
@@ -28,7 +28,7 @@ chkpw(struct gr_arg *entry, unsigned char *salt, unsigned char *sum)
 		goto out_wipe;
 
 	sg_init_table(sg, 2);
-	sg_set_buf(&sg[0], salt, GR_SALT_LEN);
+	sg_set_buf(&sg[0], salt, X_SALT_LEN);
 	sg_set_buf(&sg[1], entry->pw, strlen((const char *)entry->pw));
 
 	req = ahash_request_alloc(tfm, GFP_KERNEL);
@@ -38,19 +38,19 @@ chkpw(struct gr_arg *entry, unsigned char *salt, unsigned char *sum)
 	}
 
 	ahash_request_set_callback(req, 0, NULL, NULL);
-	ahash_request_set_crypt(req, sg, temp_sum, GR_SALT_LEN + strlen((const char *)entry->pw));
+	ahash_request_set_crypt(req, sg, temp_sum, X_SALT_LEN + strlen((const char *)entry->pw));
 
 	if (crypto_ahash_digest(req))
 		goto out_free;
 
-	if (!crypto_memneq(sumptr, tmpsumptr, GR_SHA_LEN))
+	if (!crypto_memneq(sumptr, tmpsumptr, X_SHA_LEN))
 		retval = 0;
 
 out_free:
 	ahash_request_free(req);
 	crypto_free_ahash(tfm);
 out_wipe:
-	memset(entry->pw, 0, GR_PW_LEN);
+	memset(entry->pw, 0, X_PW_LEN);
 
 	return retval;
 }

@@ -12,9 +12,9 @@
 #include <linux/types.h>
 #include <linux/sched.h>
 #include <linux/timer.h>
-#include <linux/gracl.h>
-#include <linux/grsecurity.h>
-#include <linux/grinternal.h>
+#include <linux/xacl.h>
+#include <linux/xsecurity.h>
+#include <linux/xinternal.h>
 #if defined(CONFIG_BTRFS_FS) || defined(CONFIG_BTRFS_FS_MODULE)
 #include <linux/magic.h>
 #include <linux/pagemap.h>
@@ -32,7 +32,7 @@ extern struct acl_subject_label *
 			      const struct acl_role_label *role);
 
 int
-gr_init_uidset(void)
+x_init_uidset(void)
 {
 	uid_set =
 	    kmalloc(GR_UIDTABLE_MAX * sizeof (struct crash_uid), GFP_KERNEL);
@@ -42,15 +42,15 @@ gr_init_uidset(void)
 }
 
 void
-gr_free_uidset(void)
+x_free_uidset(void)
 {
 	if (uid_set) {
 		struct crash_uid *tmpset;
-		spin_lock(&gr_uid_lock);
+		spin_lock(&x_uid_lock);
 		tmpset = uid_set;
 		uid_set = NULL;
 		uid_used = 0;
-		spin_unlock(&gr_uid_lock);
+		spin_unlock(&x_uid_lock);
 		if (tmpset)
 			kfree(tmpset);
 	}
@@ -59,7 +59,7 @@ gr_free_uidset(void)
 }
 
 int
-gr_find_uid(const uid_t uid)
+x_find_uid(const uid_t uid)
 {
 	struct crash_uid *tmp = uid_set;
 	uid_t buid;
@@ -80,7 +80,7 @@ gr_find_uid(const uid_t uid)
 }
 
 static void
-gr_insertsort(void)
+x_insertsort(void)
 {
 	unsigned short i, j;
 	struct crash_uid index;
@@ -99,15 +99,15 @@ gr_insertsort(void)
 }
 
 static void
-gr_insert_uid(const kuid_t kuid, const unsigned long expires)
+x_insert_uid(const kuid_t kuid, const unsigned long expires)
 {
 	int loc;
-	uid_t uid = GR_GLOBAL_UID(kuid);
+	uid_t uid = X_GLOBAL_UID(kuid);
 
-	if (uid_used == GR_UIDTABLE_MAX)
+	if (uid_used == X_UIDTABLE_MAX)
 		return;
 
-	loc = gr_find_uid(uid);
+	loc = x_find_uid(uid);
 
 	if (loc >= 0) {
 		uid_set[loc].expires = expires;
@@ -118,13 +118,13 @@ gr_insert_uid(const kuid_t kuid, const unsigned long expires)
 	uid_set[uid_used].expires = expires;
 	uid_used++;
 
-	gr_insertsort();
+	x_insertsort();
 
 	return;
 }
 
 void
-gr_remove_uid(const unsigned short loc)
+x_remove_uid(const unsigned short loc)
 {
 	unsigned short i;
 
@@ -136,51 +136,51 @@ gr_remove_uid(const unsigned short loc)
 	return;
 }
 
-int gr_find_and_remove_uid(uid_t uid)
+int x_find_and_remove_uid(uid_t uid)
 {
 	int loc;
 
-	spin_lock(&gr_uid_lock);
-	loc = gr_find_uid(uid);
+	spin_lock(&x_uid_lock);
+	loc = x_find_uid(uid);
 	if (loc >= 0)
-		gr_remove_uid(loc);
-	spin_unlock(&gr_uid_lock);
+		x_remove_uid(loc);
+	spin_unlock(&x_uid_lock);
 
 	return loc >= 0 ? 1 : 0;
 }
 
 int
-gr_check_crash_uid(const kuid_t kuid)
+x_check_crash_uid(const kuid_t kuid)
 {
 	int loc;
 	int ret = 0;
 	uid_t uid;
 
-	if (unlikely(!gr_acl_is_enabled()))
+	if (unlikely(!x_acl_is_enabled()))
 		return 0;
 
-	uid = GR_GLOBAL_UID(kuid);
+	uid = X_GLOBAL_UID(kuid);
 
-	spin_lock(&gr_uid_lock);
-	loc = gr_find_uid(uid);
+	spin_lock(&x_uid_lock);
+	loc = x_find_uid(uid);
 
 	if (loc < 0)
 		goto out_unlock;
 
 	if (time_before_eq(uid_set[loc].expires, get_seconds()))
-		gr_remove_uid(loc);
+		x_remove_uid(loc);
 	else
 		ret = 1;
 
 out_unlock:
-	spin_unlock(&gr_uid_lock);
+	spin_unlock(&x_uid_lock);
 	return ret;
 }
 
-extern int gr_fake_force_sig(int sig, struct task_struct *t);
+extern int x_fake_force_sig(int sig, struct task_struct *t);
 
 void
-gr_handle_crash(struct task_struct *task, const int sig)
+x_handle_crash(struct task_struct *task, const int sig)
 {
 	struct acl_subject_label *curr;
 	struct task_struct *tsk, *tsk2;
@@ -190,12 +190,12 @@ gr_handle_crash(struct task_struct *task, const int sig)
 	if (sig != SIGSEGV && sig != SIGKILL && sig != SIGBUS && sig != SIGILL)
 		return;
 
-	if (unlikely(!gr_acl_is_enabled()))
+	if (unlikely(!x_acl_is_enabled()))
 		return;
 
 	curr = task->acl;
 
-	if (!(curr->resmask & (1U << GR_CRASH_RES)))
+	if (!(curr->resmask & (1U << X_CRASH_RES)))
 		return;
 
 	if (time_before_eq(curr->expires, get_seconds())) {
@@ -206,41 +206,41 @@ gr_handle_crash(struct task_struct *task, const int sig)
 	curr->crashes++;
 
 	if (!curr->expires)
-		curr->expires = get_seconds() + curr->res[GR_CRASH_RES].rlim_max;
+		curr->expires = get_seconds() + curr->res[X_CRASH_RES].rlim_max;
 
-	if ((curr->crashes >= curr->res[GR_CRASH_RES].rlim_cur) &&
+	if ((curr->crashes >= curr->res[X_CRASH_RES].rlim_cur) &&
 	    time_after(curr->expires, get_seconds())) {
 		int is_priv = is_privileged_binary(task->mm->exe_file->f_path.dentry);
 
 		rcu_read_lock();
 		cred = __task_cred(task);
-		if (gr_is_global_nonroot(cred->uid) && is_priv) {
-			gr_log_crash1(GR_DONT_AUDIT, GR_SEGVSTART_ACL_MSG, task, curr->res[GR_CRASH_RES].rlim_max);
-			spin_lock(&gr_uid_lock);
-			gr_insert_uid(cred->uid, curr->expires);
-			spin_unlock(&gr_uid_lock);
+		if (x_is_global_nonroot(cred->uid) && is_priv) {
+			x_log_crash1(X_DONT_AUDIT, X_SEGVSTART_ACL_MSG, task, curr->res[X_CRASH_RES].rlim_max);
+			spin_lock(&x_uid_lock);
+			x_insert_uid(cred->uid, curr->expires);
+			spin_unlock(&x_uid_lock);
 			curr->expires = 0;
 			curr->crashes = 0;
 			read_lock(&tasklist_lock);
 			do_each_thread(tsk2, tsk) {
 				cred2 = __task_cred(tsk);
 				if (tsk != task && uid_eq(cred2->uid, cred->uid))
-					gr_fake_force_sig(SIGKILL, tsk);
+					x_fake_force_sig(SIGKILL, tsk);
 			} while_each_thread(tsk2, tsk);
 			read_unlock(&tasklist_lock);
 		} else {
-			gr_log_crash2(GR_DONT_AUDIT, GR_SEGVNOSUID_ACL_MSG, task, curr->res[GR_CRASH_RES].rlim_max);
+			x_log_crash2(X_DONT_AUDIT, X_SEGVNOSUID_ACL_MSG, task, curr->res[X_CRASH_RES].rlim_max);
 			read_lock(&tasklist_lock);
-			read_lock(&grsec_exec_file_lock);
+			read_lock(&xsec_exec_file_lock);
 			do_each_thread(tsk2, tsk) {
 				if (likely(tsk != task)) {
 					// if this thread has the same subject as the one that triggered
 					// RES_CRASH and it's the same binary, kill it
-					if (tsk->acl == task->acl && gr_is_same_file(tsk->exec_file, task->exec_file))
-						gr_fake_force_sig(SIGKILL, tsk);
+					if (tsk->acl == task->acl && x_is_same_file(tsk->exec_file, task->exec_file))
+						x_fake_force_sig(SIGKILL, tsk);
 				}
 			} while_each_thread(tsk2, tsk);
-			read_unlock(&grsec_exec_file_lock);
+			read_unlock(&xsec_exec_file_lock);
 			read_unlock(&tasklist_lock);
 		}
 		rcu_read_unlock();
@@ -250,25 +250,25 @@ gr_handle_crash(struct task_struct *task, const int sig)
 }
 
 int
-gr_check_crash_exec(const struct file *filp)
+x_check_crash_exec(const struct file *filp)
 {
 	struct acl_subject_label *curr;
 	struct dentry *dentry;
 
-	if (unlikely(!gr_acl_is_enabled()))
+	if (unlikely(!x_acl_is_enabled()))
 		return 0;
 
-	read_lock(&gr_inode_lock);
+	read_lock(&x_inode_lock);
 	dentry = filp->f_path.dentry;
-	curr = lookup_acl_subj_label(gr_get_ino_from_dentry(dentry), gr_get_dev_from_dentry(dentry),
+	curr = lookup_acl_subj_label(x_get_ino_from_dentry(dentry), x_get_dev_from_dentry(dentry),
 				     current->role);
-	read_unlock(&gr_inode_lock);
+	read_unlock(&x_inode_lock);
 
-	if (!curr || !(curr->resmask & (1U << GR_CRASH_RES)) ||
+	if (!curr || !(curr->resmask & (1U << X_CRASH_RES)) ||
 	    (!curr->crashes && !curr->expires))
 		return 0;
 
-	if ((curr->crashes >= curr->res[GR_CRASH_RES].rlim_cur) &&
+	if ((curr->crashes >= curr->res[X_CRASH_RES].rlim_cur) &&
 	    time_after(curr->expires, get_seconds()))
 		return 1;
 	else if (time_before_eq(curr->expires, get_seconds())) {
@@ -280,27 +280,27 @@ gr_check_crash_exec(const struct file *filp)
 }
 
 void
-gr_handle_alertkill(struct task_struct *task)
+x_handle_alertkill(struct task_struct *task)
 {
 	struct acl_subject_label *curracl;
 	__u32 curr_ip;
 	struct task_struct *p, *p2;
 
-	if (unlikely(!gr_acl_is_enabled()))
+	if (unlikely(!x_acl_is_enabled()))
 		return;
 
 	curracl = task->acl;
 	curr_ip = task->signal->curr_ip;
 
-	if ((curracl->mode & GR_KILLIPPROC) && curr_ip) {
+	if ((curracl->mode & X_KILLIPPROC) && curr_ip) {
 		read_lock(&tasklist_lock);
 		do_each_thread(p2, p) {
 			if (p->signal->curr_ip == curr_ip)
-				gr_fake_force_sig(SIGKILL, p);
+				x_fake_force_sig(SIGKILL, p);
 		} while_each_thread(p2, p);
 		read_unlock(&tasklist_lock);
-	} else if (curracl->mode & GR_KILLPROC)
-		gr_fake_force_sig(SIGKILL, task);
+	} else if (curracl->mode & X_KILLPROC)
+		x_fake_force_sig(SIGKILL, task);
 
 	return;
 }

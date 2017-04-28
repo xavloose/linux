@@ -4,19 +4,19 @@
 #include <linux/file.h>
 #include <linux/ipc.h>
 #include <linux/ipc_namespace.h>
-#include <linux/grsecurity.h>
-#include <linux/grinternal.h>
+#include <linux/xsecurity.h>
+#include <linux/xinternal.h>
 
 int
-gr_ipc_permitted(struct ipc_namespace *ns, struct kern_ipc_perm *ipcp, int requested_mode, int granted_mode)
+x_ipc_permitted(struct ipc_namespace *ns, struct kern_ipc_perm *ipcp, int requested_mode, int granted_mode)
 {
-#ifdef CONFIG_GRKERNSEC_HARDEN_IPC
+#ifdef CONFIG_XKERNSEC_HARDEN_IPC
 	int write;
 	int orig_granted_mode;
 	kuid_t euid;
 	kgid_t egid;
 
-	if (!grsec_enable_harden_ipc)
+	if (!xsec_enable_harden_ipc)
 		return 1;
 
 	euid = current_euid();
@@ -40,7 +40,7 @@ gr_ipc_permitted(struct ipc_namespace *ns, struct kern_ipc_perm *ipcp, int reque
 	}
 	if (!(requested_mode & ~granted_mode & 0007) && (requested_mode & ~orig_granted_mode & 0007) &&
 	    !ns_capable_noaudit(ns->user_ns, CAP_IPC_OWNER)) {
-		gr_log_str_int(GR_DONT_AUDIT, GR_IPC_DENIED_MSG, write ? "write" : "read", GR_GLOBAL_UID(ipcp->cuid));
+		x_log_str_int(X_DONT_AUDIT, X_IPC_DENIED_MSG, write ? "write" : "read", X_GLOBAL_UID(ipcp->cuid));
 		return 0;
 	}
 #endif

@@ -4,18 +4,18 @@
 #include <linux/binfmts.h>
 #include <linux/fs.h>
 #include <linux/types.h>
-#include <linux/grdefs.h>
-#include <linux/grsecurity.h>
-#include <linux/grinternal.h>
+#include <linux/xdefs.h>
+#include <linux/xsecurity.h>
+#include <linux/xinternal.h>
 #include <linux/capability.h>
 #include <linux/module.h>
 #include <linux/compat.h>
 
 #include <asm/uaccess.h>
 
-#ifdef CONFIG_GRKERNSEC_EXECLOG
-static char gr_exec_arg_buf[132];
-static DEFINE_MUTEX(gr_exec_arg_mutex);
+#ifdef CONFIG_XKERNSEC_EXECLOG
+static char x_exec_arg_buf[132];
+static DEFINE_MUTEX(x_exec_arg_mutex);
 #endif
 
 struct user_arg_ptr {
@@ -33,20 +33,20 @@ struct user_arg_ptr {
 extern const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr);
 
 void
-gr_handle_exec_args(struct linux_binprm *bprm, struct user_arg_ptr argv)
+x_handle_exec_args(struct linux_binprm *bprm, struct user_arg_ptr argv)
 {
-#ifdef CONFIG_GRKERNSEC_EXECLOG
-	char *grarg = gr_exec_arg_buf;
+#ifdef CONFIG_XKERNSEC_EXECLOG
+	char *grarg = x_exec_arg_buf;
 	unsigned int i, x, execlen = 0;
 	char c;
 
-	if (!((grsec_enable_execlog && grsec_enable_group &&
-	       in_group_p(grsec_audit_gid))
-	      || (grsec_enable_execlog && !grsec_enable_group)))
+	if (!((xsec_enable_execlog && xsec_enable_group &&
+	       in_group_p(xsec_audit_gid))
+	      || (xsec_enable_execlog && !xsec_enable_group)))
 		return;
 
-	mutex_lock(&gr_exec_arg_mutex);
-	memset(grarg, 0, sizeof(gr_exec_arg_buf));
+	mutex_lock(&x_exec_arg_mutex);
+	memset(grarg, 0, sizeof(x_exec_arg_buf));
 
 	for (i = 0; i < bprm->argc && execlen < 128; i++) {
 		const char __user *p;
@@ -78,21 +78,21 @@ gr_handle_exec_args(struct linux_binprm *bprm, struct user_arg_ptr argv)
 	}
 
       log:
-	gr_log_fs_str(GR_DO_AUDIT, GR_EXEC_AUDIT_MSG, bprm->file->f_path.dentry,
+	x_log_fs_str(X_DO_AUDIT, X_EXEC_AUDIT_MSG, bprm->file->f_path.dentry,
 			bprm->file->f_path.mnt, grarg);
-	mutex_unlock(&gr_exec_arg_mutex);
+	mutex_unlock(&x_exec_arg_mutex);
 #endif
 	return;
 }
 
-#ifdef CONFIG_GRKERNSEC
-extern int gr_acl_is_capable(const int cap);
-extern int gr_acl_is_capable_nolog(const int cap);
-extern int gr_task_acl_is_capable(const struct task_struct *task, const struct cred *cred, const int cap, bool log);
-extern int gr_chroot_is_capable(const int cap);
-extern int gr_chroot_is_capable_nolog(const int cap);
-extern int gr_task_chroot_is_capable(const struct task_struct *task, const struct cred *cred, const int cap);
-extern int gr_task_chroot_is_capable_nolog(const struct task_struct *task, const int cap);
+#ifdef CONFIG_XKERNSEC
+extern int x_acl_is_capable(const int cap);
+extern int x_acl_is_capable_nolog(const int cap);
+extern int x_task_acl_is_capable(const struct task_struct *task, const struct cred *cred, const int cap, bool log);
+extern int x_chroot_is_capable(const int cap);
+extern int x_chroot_is_capable_nolog(const int cap);
+extern int x_task_chroot_is_capable(const struct task_struct *task, const struct cred *cred, const int cap);
+extern int x_task_chroot_is_capable_nolog(const struct task_struct *task, const int cap);
 #endif
 
 const char *captab_log[] = {
@@ -138,10 +138,10 @@ const char *captab_log[] = {
 
 int captab_log_entries = sizeof(captab_log)/sizeof(captab_log[0]);
 
-int gr_is_capable(const int cap)
+int x_is_capable(const int cap)
 {
-#ifdef CONFIG_GRKERNSEC
-	if (gr_acl_is_capable(cap) && gr_chroot_is_capable(cap))
+#ifdef CONFIG_XKERNSEC
+	if (x_acl_is_capable(cap) && x_chroot_is_capable(cap))
 		return 1;
 	return 0;
 #else
@@ -149,10 +149,10 @@ int gr_is_capable(const int cap)
 #endif
 }
 
-int gr_task_is_capable(const struct task_struct *task, const struct cred *cred, const int cap)
+int x_task_is_capable(const struct task_struct *task, const struct cred *cred, const int cap)
 {
-#ifdef CONFIG_GRKERNSEC
-	if (gr_task_acl_is_capable(task, cred, cap, true) && gr_task_chroot_is_capable(task, cred, cap))
+#ifdef CONFIG_XKERNSEC
+	if (x_task_acl_is_capable(task, cred, cap, true) && x_task_chroot_is_capable(task, cred, cap))
 		return 1;
 	return 0;
 #else
@@ -160,10 +160,10 @@ int gr_task_is_capable(const struct task_struct *task, const struct cred *cred, 
 #endif
 }
 
-int gr_is_capable_nolog(const int cap)
+int x_is_capable_nolog(const int cap)
 {
-#ifdef CONFIG_GRKERNSEC
-	if (gr_acl_is_capable_nolog(cap) && gr_chroot_is_capable_nolog(cap))
+#ifdef CONFIG_XKERNSEC
+	if (x_acl_is_capable_nolog(cap) && x_chroot_is_capable_nolog(cap))
 		return 1;
 	return 0;
 #else
@@ -171,10 +171,10 @@ int gr_is_capable_nolog(const int cap)
 #endif
 }
 
-int gr_task_is_capable_nolog(const struct task_struct *task, const struct cred *cred, const int cap)
+int x_task_is_capable_nolog(const struct task_struct *task, const struct cred *cred, const int cap)
 {
-#ifdef CONFIG_GRKERNSEC
-	if (gr_task_acl_is_capable(task, cred, cap, false) && gr_task_chroot_is_capable_nolog(task, cap))
+#ifdef CONFIG_XKERNSEC
+	if (x_task_acl_is_capable(task, cred, cap, false) && x_task_chroot_is_capable_nolog(task, cap))
 		return 1;
 	return 0;
 #else
@@ -182,7 +182,7 @@ int gr_task_is_capable_nolog(const struct task_struct *task, const struct cred *
 #endif
 }
 
-EXPORT_SYMBOL_GPL(gr_is_capable);
-EXPORT_SYMBOL_GPL(gr_is_capable_nolog);
-EXPORT_SYMBOL_GPL(gr_task_is_capable);
-EXPORT_SYMBOL_GPL(gr_task_is_capable_nolog);
+EXPORT_SYMBOL_GPL(x_is_capable);
+EXPORT_SYMBOL_GPL(x_is_capable_nolog);
+EXPORT_SYMBOL_GPL(x_task_is_capable);
+EXPORT_SYMBOL_GPL(x_task_is_capable_nolog);

@@ -6,20 +6,20 @@
 #include <linux/file.h>
 #include <linux/types.h>
 #include <linux/vmalloc.h>
-#include <linux/grinternal.h>
+#include <linux/xinternal.h>
 
-extern ssize_t write_grsec_handler(struct file * file, const char __user * buf,
+extern ssize_t write_xsec_handler(struct file * file, const char __user * buf,
 				   size_t count, loff_t *ppos);
-extern int gr_acl_is_enabled(void);
+extern int x_acl_is_enabled(void);
 
 static DECLARE_WAIT_QUEUE_HEAD(learn_wait);
-static int gr_learn_attached;
+static int x_learn_attached;
 
 /* use a 512k buffer */
 #define LEARN_BUFFER_SIZE (512 * 1024)
 
-static DEFINE_SPINLOCK(gr_learn_lock);
-static DEFINE_MUTEX(gr_learn_user_mutex);
+static DEFINE_SPINLOCK(x_learn_lock);
+static DEFINE_MUTEX(x_learn_user_mutex);
 
 /* we need to maintain two buffers, so that the kernel context of grlearn
    uses a semaphore around the userspace copying, and the other kernel contexts
@@ -38,15 +38,15 @@ read_learn(struct file *file, char __user * buf, size_t count, loff_t * ppos)
 
 	add_wait_queue(&learn_wait, &wait);
 	do {
-		mutex_lock(&gr_learn_user_mutex);
+		mutex_lock(&x_learn_user_mutex);
 		set_current_state(TASK_INTERRUPTIBLE);
-		spin_lock(&gr_learn_lock);
+		spin_lock(&x_learn_lock);
 		if (learn_buffer_len) {
 			set_current_state(TASK_RUNNING);
 			break;
 		}
-		spin_unlock(&gr_learn_lock);
-		mutex_unlock(&gr_learn_user_mutex);
+		spin_unlock(&x_learn_lock);
+		mutex_unlock(&x_learn_user_mutex);
 		if (file->f_flags & O_NONBLOCK) {
 			retval = -EAGAIN;
 			goto out;
@@ -64,12 +64,12 @@ read_learn(struct file *file, char __user * buf, size_t count, loff_t * ppos)
 	retval = learn_buffer_len;
 	learn_buffer_len = 0;
 
-	spin_unlock(&gr_learn_lock);
+	spin_unlock(&x_learn_lock);
 
 	if (copy_to_user(buf, learn_buffer_user, learn_buffer_user_len))
 		retval = -EFAULT;
 
-	mutex_unlock(&gr_learn_user_mutex);
+	mutex_unlock(&x_learn_user_mutex);
 out:
 	set_current_state(TASK_RUNNING);
 	remove_wait_queue(&learn_wait, &wait);
@@ -88,15 +88,15 @@ poll_learn(struct file * file, poll_table * wait)
 }
 
 void
-gr_clear_learn_entries(void)
+x_clear_learn_entries(void)
 {
 	char *tmp;
 
-	mutex_lock(&gr_learn_user_mutex);
-	spin_lock(&gr_learn_lock);
+	mutex_lock(&x_learn_user_mutex);
+	spin_lock(&x_learn_lock);
 	tmp = learn_buffer;
 	learn_buffer = NULL;
-	spin_unlock(&gr_learn_lock);
+	spin_unlock(&x_learn_lock);
 	if (tmp)
 		vfree(tmp);
 	if (learn_buffer_user != NULL) {
@@ -104,13 +104,13 @@ gr_clear_learn_entries(void)
 		learn_buffer_user = NULL;
 	}
 	learn_buffer_len = 0;
-	mutex_unlock(&gr_learn_user_mutex);
+	mutex_unlock(&x_learn_user_mutex);
 
 	return;
 }
 
 void
-gr_add_learn_entry(const char *fmt, ...)
+x_add_learn_entry(const char *fmt, ...)
 {
 	va_list args;
 	unsigned int len;
@@ -118,18 +118,18 @@ gr_add_learn_entry(const char *fmt, ...)
 	if (!gr_learn_attached)
 		return;
 
-	spin_lock(&gr_learn_lock);
+	spin_lock(&x_learn_lock);
 
 	/* leave a gap at the end so we know when it's "full" but don't have to
 	   compute the exact length of the string we're trying to append
 	*/
 	if (learn_buffer_len > LEARN_BUFFER_SIZE - 16384) {
-		spin_unlock(&gr_learn_lock);
+		spin_unlock(&x_learn_lock);
 		wake_up_interruptible(&learn_wait);
 		return;
 	}
 	if (learn_buffer == NULL) {
-		spin_unlock(&gr_learn_lock);
+		spin_unlock(&x_learn_lock);
 		return;
 	}
 
@@ -139,7 +139,7 @@ gr_add_learn_entry(const char *fmt, ...)
 
 	learn_buffer_len += len + 1;
 
-	spin_unlock(&gr_learn_lock);
+	spin_unlock(&x_learn_lock);
 	wake_up_interruptible(&learn_wait);
 
 	return;
@@ -148,11 +148,11 @@ gr_add_learn_entry(const char *fmt, ...)
 static int
 open_learn(struct inode *inode, struct file *file)
 {
-	if (file->f_mode & FMODE_READ && gr_learn_attached)
+	if (file->f_mode & FMODE_READ && x_learn_attached)
 		return -EBUSY;
 	if (file->f_mode & FMODE_READ) {
 		int retval = 0;
-		mutex_lock(&gr_learn_user_mutex);
+		mutex_lock(&x_learn_user_mutex);
 		if (learn_buffer == NULL)
 			learn_buffer = vmalloc(LEARN_BUFFER_SIZE);
 		if (learn_buffer_user == NULL)
@@ -167,9 +167,9 @@ open_learn(struct inode *inode, struct file *file)
 		}
 		learn_buffer_len = 0;
 		learn_buffer_user_len = 0;
-		gr_learn_attached = 1;
+		x_learn_attached = 1;
 out_error:
-		mutex_unlock(&gr_learn_user_mutex);
+		mutex_unlock(&x_learn_user_mutex);
 		return retval;
 	}
 	return 0;
@@ -180,11 +180,11 @@ close_learn(struct inode *inode, struct file *file)
 {
 	if (file->f_mode & FMODE_READ) {
 		char *tmp = NULL;
-		mutex_lock(&gr_learn_user_mutex);
-		spin_lock(&gr_learn_lock);
+		mutex_lock(&x_learn_user_mutex);
+		spin_lock(&x_learn_lock);
 		tmp = learn_buffer;
 		learn_buffer = NULL;
-		spin_unlock(&gr_learn_lock);
+		spin_unlock(&x_learn_lock);
 		if (tmp)
 			vfree(tmp);
 		if (learn_buffer_user != NULL) {
@@ -193,16 +193,16 @@ close_learn(struct inode *inode, struct file *file)
 		}
 		learn_buffer_len = 0;
 		learn_buffer_user_len = 0;
-		gr_learn_attached = 0;
-		mutex_unlock(&gr_learn_user_mutex);
+		x_learn_attached = 0;
+		mutex_unlock(&x_learn_user_mutex);
 	}
 
 	return 0;
 }
-		
-const struct file_operations grsec_fops = {
+
+const struct file_operations xsec_fops = {
 	.read		= read_learn,
-	.write		= write_grsec_handler,
+	.write		= write_xsec_handler,
 	.open		= open_learn,
 	.release	= close_learn,
 	.poll		= poll_learn,

@@ -1,464 +1,464 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/sysctl.h>
-#include <linux/grsecurity.h>
-#include <linux/grinternal.h>
+#include <linux/xsec.h>
+#include <linux/xinternal.h>
 
 int
-gr_handle_sysctl_mod(const char *dirname, const char *name, const int op)
+x_handle_sysctl_mod(const char *dirname, const char *name, const int op)
 {
-#ifdef CONFIG_GRKERNSEC_SYSCTL
+#ifdef CONFIG_XKERNSEC_SYSCTL
 	if (dirname == NULL || name == NULL)
 		return 0;
-	if (!strcmp(dirname, "grsecurity") && grsec_lock && (op & MAY_WRITE)) {
-		gr_log_str(GR_DONT_AUDIT, GR_SYSCTL_MSG, name);
+	if (!strcmp(dirname, "xsec") && xsec_lock && (op & MAY_WRITE)) {
+		x_log_str(X_DONT_AUDIT, X_SYSCTL_MSG, name);
 		return -EACCES;
 	}
 #endif
 	return 0;
 }
 
-#if defined(CONFIG_GRKERNSEC_ROFS) || defined(CONFIG_GRKERNSEC_DENYUSB)
+#if defined(CONFIG_XKERNSEC_ROFS) || defined(CONFIG_XKERNSEC_DENYUSB)
 static int __maybe_unused __read_only one = 1;
 #endif
 
-#if defined(CONFIG_GRKERNSEC_SYSCTL) || defined(CONFIG_GRKERNSEC_ROFS) || \
-	defined(CONFIG_GRKERNSEC_DENYUSB)
-struct ctl_table grsecurity_table[] = {
-#ifdef CONFIG_GRKERNSEC_SYSCTL
-#ifdef CONFIG_GRKERNSEC_SYSCTL_DISTRO
-#ifdef CONFIG_GRKERNSEC_IO
+#if defined(CONFIG_XKERNSEC_SYSCTL) || defined(CONFIG_XKERNSEC_ROFS) || \
+	defined(CONFIG_XKERNSEC_DENYUSB)
+struct ctl_table xsec_table[] = {
+#ifdef CONFIG_XKERNSEC_SYSCTL
+#ifdef CONFIG_XKERNSEC_SYSCTL_DISTRO
+#ifdef CONFIG_XKERNSEC_IO
 	{
 		.procname	= "disable_priv_io",
-		.data		= &grsec_disable_privio,
+		.data		= &xsec_disable_privio,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
 #endif
-#ifdef CONFIG_GRKERNSEC_LINK
+#ifdef CONFIG_XKERNSEC_LINK
 	{
 		.procname	= "linking_restrictions",
-		.data		= &grsec_enable_link,
+		.data		= &xsec_enable_link,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_SYMLINKOWN
+#ifdef CONFIG_XKERNSEC_SYMLINKOWN
 	{
 		.procname	= "enforce_symlinksifowner",
-		.data		= &grsec_enable_symlinkown,
+		.data		= &xsec_enable_symlinkown,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 	{
 		.procname	= "symlinkown_gid",
-		.data		= &grsec_symlinkown_gid,
+		.data		= &xsec_symlinkown_gid,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_BRUTE
+#ifdef CONFIG_XKERNSEC_BRUTE
 	{
 		.procname	= "deter_bruteforce",
-		.data		= &grsec_enable_brute,
+		.data		= &xsec_enable_brute,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_FIFO
+#ifdef CONFIG_XKERNSEC_FIFO
 	{
 		.procname	= "fifo_restrictions",
-		.data		= &grsec_enable_fifo,
+		.data		= &xsec_enable_fifo,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_PTRACE_READEXEC
+#ifdef CONFIG_XKERNSEC_PTRACE_READEXEC
 	{
 		.procname	= "ptrace_readexec",
-		.data		= &grsec_enable_ptrace_readexec,
+		.data		= &xsec_enable_ptrace_readexec,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_SETXID
+#ifdef CONFIG_XKERNSEC_SETXID
 	{
 		.procname	= "consistent_setxid",
-		.data		= &grsec_enable_setxid,
+		.data		= &xsec_enable_setxid,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+#ifdef CONFIG_XKERNSEC_BLACKHOLE
 	{
 		.procname	= "ip_blackhole",
-		.data		= &grsec_enable_blackhole,
+		.data		= &xsec_enable_blackhole,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 	{
 		.procname	= "lastack_retries",
-		.data		= &grsec_lastack_retries,
+		.data		= &xsec_lastack_retries,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_EXECLOG
+#ifdef CONFIG_XKERNSEC_EXECLOG
 	{
 		.procname	= "exec_logging",
-		.data		= &grsec_enable_execlog,
+		.data		= &xsec_enable_execlog,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_RWXMAP_LOG
+#ifdef CONFIG_XKERNSEC_RWXMAP_LOG
 	{
 		.procname	= "rwxmap_logging",
-		.data		= &grsec_enable_log_rwxmaps,
+		.data		= &xsec_enable_log_rwxmaps,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_SIGNAL
+#ifdef CONFIG_XKERNSEC_SIGNAL
 	{
 		.procname	= "signal_logging",
-		.data		= &grsec_enable_signal,
+		.data		= &xsec_enable_signal,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_FORKFAIL
+#ifdef CONFIG_XKERNSEC_FORKFAIL
 	{
 		.procname	= "forkfail_logging",
-		.data		= &grsec_enable_forkfail,
+		.data		= &xsec_enable_forkfail,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_TIME
+#ifdef CONFIG_XKERNSEC_TIME
 	{
 		.procname	= "timechange_logging",
-		.data		= &grsec_enable_time,
+		.data		= &xsec_enable_time,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_SHMAT
+#ifdef CONFIG_XKERNSEC_CHROOT_SHMAT
 	{
 		.procname	= "chroot_deny_shmat",
-		.data		= &grsec_enable_chroot_shmat,
+		.data		= &xsec_enable_chroot_shmat,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_UNIX
+#ifdef CONFIG_XKERNSEC_CHROOT_UNIX
 	{
 		.procname	= "chroot_deny_unix",
-		.data		= &grsec_enable_chroot_unix,
+		.data		= &xsec_enable_chroot_unix,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_MOUNT
+#ifdef CONFIG_XKERNSEC_CHROOT_MOUNT
 	{
 		.procname	= "chroot_deny_mount",
-		.data		= &grsec_enable_chroot_mount,
+		.data		= &xsec_enable_chroot_mount,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_FCHDIR
+#ifdef CONFIG_XKERNSEC_CHROOT_FCHDIR
 	{
 		.procname	= "chroot_deny_fchdir",
-		.data		= &grsec_enable_chroot_fchdir,
+		.data		= &xsec_enable_chroot_fchdir,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_DOUBLE
+#ifdef CONFIG_XKERNSEC_CHROOT_DOUBLE
 	{
 		.procname	= "chroot_deny_chroot",
-		.data		= &grsec_enable_chroot_double,
+		.data		= &xsec_enable_chroot_double,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_PIVOT
+#ifdef CONFIG_XKERNSEC_CHROOT_PIVOT
 	{
 		.procname	= "chroot_deny_pivot",
-		.data		= &grsec_enable_chroot_pivot,
+		.data		= &xsec_enable_chroot_pivot,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_CHDIR
+#ifdef CONFIG_XKERNSEC_CHROOT_CHDIR
 	{
 		.procname	= "chroot_enforce_chdir",
-		.data		= &grsec_enable_chroot_chdir,
+		.data		= &xsec_enable_chroot_chdir,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_CHMOD
+#ifdef CONFIG_XKERNSEC_CHROOT_CHMOD
 	{
 		.procname	= "chroot_deny_chmod",
-		.data		= &grsec_enable_chroot_chmod,
+		.data		= &xsec_enable_chroot_chmod,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_MKNOD
+#ifdef CONFIG_XKERNSEC_CHROOT_MKNOD
 	{
 		.procname	= "chroot_deny_mknod",
-		.data		= &grsec_enable_chroot_mknod,
+		.data		= &xsec_enable_chroot_mknod,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_NICE
+#ifdef CONFIG_XKERNSEC_CHROOT_NICE
 	{
 		.procname	= "chroot_restrict_nice",
-		.data		= &grsec_enable_chroot_nice,
+		.data		= &xsec_enable_chroot_nice,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_EXECLOG
+#ifdef CONFIG_XKERNSEC_CHROOT_EXECLOG
 	{
 		.procname	= "chroot_execlog",
-		.data		= &grsec_enable_chroot_execlog,
+		.data		= &xsec_enable_chroot_execlog,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_CAPS
+#ifdef CONFIG_XKERNSEC_CHROOT_CAPS
 	{
 		.procname	= "chroot_caps",
-		.data		= &grsec_enable_chroot_caps,
+		.data		= &xsec_enable_chroot_caps,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_RENAME
+#ifdef CONFIG_XKERNSEC_CHROOT_RENAME
 	{
 		.procname	= "chroot_deny_bad_rename",
-		.data		= &grsec_enable_chroot_rename,
+		.data		= &xsec_enable_chroot_rename,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_SYSCTL
+#ifdef CONFIG_XKERNSEC_CHROOT_SYSCTL
 	{
 		.procname	= "chroot_deny_sysctl",
-		.data		= &grsec_enable_chroot_sysctl,
+		.data		= &xsec_enable_chroot_sysctl,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_TPE
+#ifdef CONFIG_XKERNSEC_TPE
 	{
 		.procname	= "tpe",
-		.data		= &grsec_enable_tpe,
+		.data		= &xsec_enable_tpe,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 	{
 		.procname	= "tpe_gid",
-		.data		= &grsec_tpe_gid,
+		.data		= &xsec_tpe_gid,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_TPE_INVERT
+#ifdef CONFIG_XKERNSEC_TPE_INVERT
 	{
 		.procname	= "tpe_invert",
-		.data		= &grsec_enable_tpe_invert,
+		.data		= &xsec_enable_tpe_invert,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_TPE_ALL
+#ifdef CONFIG_XKERNSEC_TPE_ALL
 	{
 		.procname	= "tpe_restrict_all",
-		.data		= &grsec_enable_tpe_all,
+		.data		= &xsec_enable_tpe_all,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_SOCKET_ALL
+#ifdef CONFIG_XKERNSEC_SOCKET_ALL
 	{
 		.procname	= "socket_all",
-		.data		= &grsec_enable_socket_all,
+		.data		= &xsec_enable_socket_all,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 	{
 		.procname	= "socket_all_gid",
-		.data		= &grsec_socket_all_gid,
+		.data		= &xsec_socket_all_gid,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_SOCKET_CLIENT
+#ifdef CONFIG_XKERNSEC_SOCKET_CLIENT
 	{
 		.procname	= "socket_client",
-		.data		= &grsec_enable_socket_client,
+		.data		= &xsec_enable_socket_client,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 	{
 		.procname	= "socket_client_gid",
-		.data		= &grsec_socket_client_gid,
+		.data		= &xsec_socket_client_gid,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_SOCKET_SERVER
+#ifdef CONFIG_XKERNSEC_SOCKET_SERVER
 	{
 		.procname	= "socket_server",
-		.data		= &grsec_enable_socket_server,
+		.data		= &xsec_enable_socket_server,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 	{
 		.procname	= "socket_server_gid",
-		.data		= &grsec_socket_server_gid,
+		.data		= &xsec_socket_server_gid,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_AUDIT_GROUP
+#ifdef CONFIG_XKERNSEC_AUDIT_GROUP
 	{
 		.procname	= "audit_group",
-		.data		= &grsec_enable_group,
+		.data		= &xsec_enable_group,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 	{
 		.procname	= "audit_gid",
-		.data		= &grsec_audit_gid,
+		.data		= &xsec_audit_gid,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_AUDIT_CHDIR
+#ifdef CONFIG_XKERNSEC_AUDIT_CHDIR
 	{
 		.procname	= "audit_chdir",
-		.data		= &grsec_enable_chdir,
+		.data		= &xsec_enable_chdir,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_AUDIT_MOUNT
+#ifdef CONFIG_XKERNSEC_AUDIT_MOUNT
 	{
 		.procname	= "audit_mount",
-		.data		= &grsec_enable_mount,
+		.data		= &xsec_enable_mount,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_DMESG
+#ifdef CONFIG_XKERNSEC_DMESG
 	{
 		.procname	= "dmesg",
-		.data		= &grsec_enable_dmesg,
+		.data		= &xsec_enable_dmesg,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_CHROOT_FINDTASK
+#ifdef CONFIG_XKERNSEC_CHROOT_FINDTASK
 	{
 		.procname	= "chroot_findtask",
-		.data		= &grsec_enable_chroot_findtask,
+		.data		= &xsec_enable_chroot_findtask,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_RESLOG
+#ifdef CONFIG_XKERNSEC_RESLOG
 	{
 		.procname	= "resource_logging",
-		.data		= &grsec_resource_logging,
+		.data		= &xsec_resource_logging,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_AUDIT_PTRACE
+#ifdef CONFIG_XKERNSEC_AUDIT_PTRACE
 	{
 		.procname	= "audit_ptrace",
-		.data		= &grsec_enable_audit_ptrace,
+		.data		= &xsec_enable_audit_ptrace,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_HARDEN_PTRACE
+#ifdef CONFIG_XKERNSEC_HARDEN_PTRACE
 	{
 		.procname	= "harden_ptrace",
-		.data		= &grsec_enable_harden_ptrace,
+		.data		= &xsec_enable_harden_ptrace,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_HARDEN_IPC
+#ifdef CONFIG_XKERNSEC_HARDEN_IPC
 	{
 		.procname	= "harden_ipc",
-		.data		= &grsec_enable_harden_ipc,
+		.data		= &xsec_enable_harden_ipc,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_HARDEN_TTY
+#ifdef CONFIG_XKERNSEC_HARDEN_TTY
 	{
 		.procname	= "harden_tty",
-		.data		= &grsec_enable_harden_tty,
+		.data		= &xsec_enable_harden_tty,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
@@ -466,16 +466,16 @@ struct ctl_table grsecurity_table[] = {
 #endif
 	{
 		.procname	= "grsec_lock",
-		.data		= &grsec_lock,
+		.data		= &xsec_lock,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,
 	},
 #endif
-#ifdef CONFIG_GRKERNSEC_ROFS
+#ifdef CONFIG_XKERNSEC_ROFS
 	{
 		.procname	= "romount_protect",
-		.data		= &grsec_enable_rofs,
+		.data		= &xsec_enable_rofs,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_minmax_secure,
@@ -483,10 +483,10 @@ struct ctl_table grsecurity_table[] = {
 		.extra2		= &one,
 	},
 #endif
-#if defined(CONFIG_GRKERNSEC_DENYUSB) && !defined(CONFIG_GRKERNSEC_DENYUSB_FORCE)
+#if defined(CONFIG_XKERNSEC_DENYUSB) && !defined(CONFIG_XKERNSEC_DENYUSB_FORCE)
 	{
 		.procname	= "deny_new_usb",
-		.data		= &grsec_deny_new_usb,
+		.data		= &xsec_deny_new_usb,
 		.maxlen		= sizeof(int),
 		.mode		= 0600,
 		.proc_handler	= &proc_dointvec_secure,

@@ -14,10 +14,10 @@
 #include <linux/sysctl.h>
 #include <linux/netdevice.h>
 #include <linux/ptrace.h>
-#include <linux/gracl.h>
-#include <linux/gralloc.h>
+#include <linux/xacl.h>
+#include <linux/xalloc.h>
 #include <linux/security.h>
-#include <linux/grinternal.h>
+#include <linux/xinternal.h>
 #include <linux/pid_namespace.h>
 #include <linux/stop_machine.h>
 #include <linux/fdtable.h>
@@ -30,7 +30,7 @@
 #include <asm/errno.h>
 #include <asm/mman.h>
 
-extern struct gr_policy_state *polstate;
+extern struct x_policy_state *polstate;
 
 #define FOR_EACH_ROLE_START(role) \
 	role = polstate->role_list; \
@@ -40,46 +40,46 @@ extern struct gr_policy_state *polstate;
 		role = role->prev; \
 	}
 
-struct path gr_real_root;
+struct path x_real_root;
 
-extern struct gr_alloc_state *current_alloc_state;
+extern struct x_alloc_state *current_alloc_state;
 
 u16 acl_sp_role_value;
 
-static DEFINE_MUTEX(gr_dev_mutex);
+static DEFINE_MUTEX(x_dev_mutex);
 
-extern int chkpw(struct gr_arg *entry, unsigned char *salt, unsigned char *sum);
-extern void gr_clear_learn_entries(void);
+extern int chkpw(struct x_arg *entry, unsigned char *salt, unsigned char *sum);
+extern void x_clear_learn_entries(void);
 
-struct gr_arg *gr_usermode __read_only;
-unsigned char *gr_system_salt __read_only;
-unsigned char *gr_system_sum __read_only;
+struct x_arg *x_usermode __read_only;
+unsigned char *x_system_salt __read_only;
+unsigned char *x_system_sum __read_only;
 
-static unsigned int gr_auth_attempts = 0;
-static unsigned long gr_auth_expires = 0UL;
+static unsigned int x_auth_attempts = 0;
+static unsigned long x_auth_expires = 0UL;
 
 struct acl_object_label *fakefs_obj_rw;
 struct acl_object_label *fakefs_obj_rwx;
 
-extern int gr_init_uidset(void);
-extern void gr_free_uidset(void);
-extern int gr_find_and_remove_uid(uid_t uid);
+extern int x_init_uidset(void);
+extern void x_free_uidset(void);
+extern int x_find_and_remove_uid(uid_t uid);
 
-extern struct acl_subject_label *__gr_get_subject_for_task(const struct gr_policy_state *state, struct task_struct *task, const char *filename, int fallback);
-extern void __gr_apply_subject_to_task(const struct gr_policy_state *state, struct task_struct *task, struct acl_subject_label *subj);
-extern int gr_streq(const char *a, const char *b, const unsigned int lena, const unsigned int lenb);
-extern void __insert_inodev_entry(const struct gr_policy_state *state, struct inodev_entry *entry);
-extern struct acl_role_label *__lookup_acl_role_label(const struct gr_policy_state *state, const struct task_struct *task, const uid_t uid, const gid_t gid);
+extern struct acl_subject_label *__x_get_subject_for_task(const struct x_policy_state *state, struct task_struct *task, const char *filename, int fallback);
+extern void __x_apply_subject_to_task(const struct x_policy_state *state, struct task_struct *task, struct acl_subject_label *subj);
+extern int x_streq(const char *a, const char *b, const unsigned int lena, const unsigned int lenb);
+extern void __insert_inodev_entry(const struct x_policy_state *state, struct inodev_entry *entry);
+extern struct acl_role_label *__lookup_acl_role_label(const struct x_policy_state *state, const struct task_struct *task, const uid_t uid, const gid_t gid);
 extern void insert_acl_obj_label(struct acl_object_label *obj, struct acl_subject_label *subj);
 extern void insert_acl_subj_label(struct acl_subject_label *obj, struct acl_role_label *role);
-extern struct name_entry * __lookup_name_entry(const struct gr_policy_state *state, const char *name);
-extern char *gr_to_filename_rbac(const struct dentry *dentry, const struct vfsmount *mnt);
+extern struct name_entry * __lookup_name_entry(const struct x_policy_state *state, const char *name);
+extern char *x_to_filename_rbac(const struct dentry *dentry, const struct vfsmount *mnt);
 extern struct acl_subject_label *lookup_acl_subj_label(const u64 ino, const dev_t dev, const struct acl_role_label *role);
 extern struct acl_subject_label *lookup_acl_subj_label_deleted(const u64 ino, const dev_t dev, const struct acl_role_label *role);
 extern void assign_special_role(const char *rolename);
 extern struct acl_subject_label *chk_subj_label(const struct dentry *l_dentry, const struct vfsmount *l_mnt, const struct acl_role_label *role);
-extern int gr_rbac_disable(void *unused);
-extern void gr_enable_rbac_system(void);
+extern int x_rbac_disable(void *unused);
+extern void x_enable_rbac_system(void);
 
 static int copy_acl_object_label_normal(struct acl_object_label *obj, const struct acl_object_label *userp)
 {
@@ -129,9 +129,9 @@ static int copy_sprole_pw_normal(struct sprole_pw *pw, unsigned long idx, const 
 	return 0;
 }
 
-static int copy_gr_hash_struct_normal(struct gr_hash_struct *hash, const struct gr_hash_struct *userp)
+static int copy_x_hash_struct_normal(struct x_hash_struct *hash, const struct x_hash_struct *userp)
 {
-	if (copy_from_user(hash, userp, sizeof(struct gr_hash_struct)))
+	if (copy_from_user(hash, userp, sizeof(struct x_hash_struct)))
 		return -EFAULT;
 
 	return 0;
@@ -153,62 +153,62 @@ int copy_pointer_from_array_normal(void *ptr, unsigned long idx, const void *use
 	return 0;
 }
 
-static int copy_gr_arg_wrapper_normal(const char __user *buf, struct gr_arg_wrapper *uwrap)
+static int copy_x_arg_wrapper_normal(const char __user *buf, struct x_arg_wrapper *uwrap)
 {
-	if (copy_from_user(uwrap, buf, sizeof (struct gr_arg_wrapper)))
+	if (copy_from_user(uwrap, buf, sizeof (struct x_arg_wrapper)))
 		return -EFAULT;
 
-	if ((uwrap->version != GRSECURITY_VERSION) ||
-	    (uwrap->size != sizeof(struct gr_arg)))
+	if ((uwrap->version != XSEC_VERSION) ||
+	    (uwrap->size != sizeof(struct x_arg)))
 		return -EINVAL;
 
 	return 0;
 }
 
-static int copy_gr_arg_normal(const struct gr_arg __user *buf, struct gr_arg *arg)
+static int copy_x_arg_normal(const struct x_arg __user *buf, struct x_arg *arg)
 {
-	if (copy_from_user(arg, buf, sizeof (struct gr_arg)))
+	if (copy_from_user(arg, buf, sizeof (struct x_arg)))
 		return -EFAULT;
 
 	return 0;
 }
 
-static size_t get_gr_arg_wrapper_size_normal(void)
+static size_t get_x_arg_wrapper_size_normal(void)
 {
-	return sizeof(struct gr_arg_wrapper);
+	return sizeof(struct x_arg_wrapper);
 }
 
 #ifdef CONFIG_COMPAT
-extern int copy_gr_arg_wrapper_compat(const char *buf, struct gr_arg_wrapper *uwrap);
-extern int copy_gr_arg_compat(const struct gr_arg __user *buf, struct gr_arg *arg);
+extern int copy_x_arg_wrapper_compat(const char *buf, struct x_arg_wrapper *uwrap);
+extern int copy_x_arg_compat(const struct x_arg __user *buf, struct x_arg *arg);
 extern int copy_acl_object_label_compat(struct acl_object_label *obj, const struct acl_object_label *userp);
 extern int copy_acl_subject_label_compat(struct acl_subject_label *subj, const struct acl_subject_label *userp);
 extern int copy_acl_role_label_compat(struct acl_role_label *role, const struct acl_role_label *userp);
 extern int copy_role_allowed_ip_compat(struct role_allowed_ip *roleip, const struct role_allowed_ip *userp);
 extern int copy_role_transition_compat(struct role_transition *trans, const struct role_transition *userp);
-extern int copy_gr_hash_struct_compat(struct gr_hash_struct *hash, const struct gr_hash_struct *userp);
+extern int copy_x_hash_struct_compat(struct x_hash_struct *hash, const struct x_hash_struct *userp);
 extern int copy_pointer_from_array_compat(void *ptr, unsigned long idx, const void *userp);
 extern int copy_acl_ip_label_compat(struct acl_ip_label *ip, const struct acl_ip_label *userp);
 extern int copy_sprole_pw_compat(struct sprole_pw *pw, unsigned long idx, const struct sprole_pw *userp);
-extern size_t get_gr_arg_wrapper_size_compat(void);
+extern size_t get_x_arg_wrapper_size_compat(void);
 
-int (* copy_gr_arg_wrapper)(const char *buf, struct gr_arg_wrapper *uwrap) __read_only;
-int (* copy_gr_arg)(const struct gr_arg *buf, struct gr_arg *arg) __read_only;
+int (* copy_x_arg_wrapper)(const char *buf, struct x_arg_wrapper *uwrap) __read_only;
+int (* copy_x_arg)(const struct x_arg *buf, struct x_arg *arg) __read_only;
 int (* copy_acl_object_label)(struct acl_object_label *obj, const struct acl_object_label *userp) __read_only;
 int (* copy_acl_subject_label)(struct acl_subject_label *subj, const struct acl_subject_label *userp) __read_only;
 int (* copy_acl_role_label)(struct acl_role_label *role, const struct acl_role_label *userp) __read_only;
 int (* copy_acl_ip_label)(struct acl_ip_label *ip, const struct acl_ip_label *userp) __read_only;
 int (* copy_pointer_from_array)(void *ptr, unsigned long idx, const void *userp) __read_only;
 int (* copy_sprole_pw)(struct sprole_pw *pw, unsigned long idx, const struct sprole_pw *userp) __read_only;
-int (* copy_gr_hash_struct)(struct gr_hash_struct *hash, const struct gr_hash_struct *userp) __read_only;
+int (* copy_x_hash_struct)(struct x_hash_struct *hash, const struct x_hash_struct *userp) __read_only;
 int (* copy_role_transition)(struct role_transition *trans, const struct role_transition *userp) __read_only;
 int (* copy_role_allowed_ip)(struct role_allowed_ip *roleip, const struct role_allowed_ip *userp) __read_only;
-size_t (* get_gr_arg_wrapper_size)(void) __read_only;
+size_t (* get_x_arg_wrapper_size)(void) __read_only;
 
 #else
-#define copy_gr_arg_wrapper copy_gr_arg_wrapper_normal
-#define copy_gr_arg copy_gr_arg_normal
-#define copy_gr_hash_struct copy_gr_hash_struct_normal
+#define copy_x_arg_wrapper copy_x_arg_wrapper_normal
+#define copy_x_arg copy_x_arg_normal
+#define copy_x_hash_struct copy_x_hash_struct_normal
 #define copy_acl_object_label copy_acl_object_label_normal
 #define copy_acl_subject_label copy_acl_subject_label_normal
 #define copy_acl_role_label copy_acl_role_label_normal
@@ -217,13 +217,13 @@ size_t (* get_gr_arg_wrapper_size)(void) __read_only;
 #define copy_sprole_pw copy_sprole_pw_normal
 #define copy_role_transition copy_role_transition_normal
 #define copy_role_allowed_ip copy_role_allowed_ip_normal
-#define get_gr_arg_wrapper_size get_gr_arg_wrapper_size_normal
+#define get_x_arg_wrapper_size get_x_arg_wrapper_size_normal
 #endif
 
 static struct acl_subject_label *
 lookup_subject_map(const struct acl_subject_label *userp)
 {
-	unsigned int index = gr_shash(userp, polstate->subj_map_set.s_size);
+	unsigned int index = x_shash(userp, polstate->subj_map_set.s_size);
 	struct subject_map *match;
 
 	match = polstate->subj_map_set.s_hash[index];
@@ -240,7 +240,7 @@ lookup_subject_map(const struct acl_subject_label *userp)
 static void
 insert_subj_map_entry(struct subject_map *subjmap)
 {
-	unsigned int index = gr_shash(subjmap->user, polstate->subj_map_set.s_size);
+	unsigned int index = x_shash(subjmap->user, polstate->subj_map_set.s_size);
 	struct subject_map **curr;
 
 	subjmap->prev = NULL;
@@ -259,7 +259,7 @@ static void
 __insert_acl_role_label(struct acl_role_label *role, uid_t uidgid)
 {
 	unsigned int index =
-	    gr_rhash(uidgid, role->roletype & (GR_ROLE_USER | GR_ROLE_GROUP), polstate->acl_role_set.r_size);
+	    x_rhash(uidgid, role->roletype & (X_ROLE_USER | X_ROLE_GROUP), polstate->acl_role_set.r_size);
 	struct acl_role_label **curr;
 	struct acl_role_label *tmp, *tmp2;
 
@@ -290,7 +290,7 @@ __insert_acl_role_label(struct acl_role_label *role, uid_t uidgid)
 			/* 1 -> 2 -> 3 -> 4
 			   2 -> 3 -> 4
 			   3 -> 4 (adding 1 -> 2 -> 3 -> 4 to here)
-			*/			   
+			*/
 			/* trickier case: walk our role's chain until we find
 			   the role for the start of the current slot's chain */
 			tmp = role;
@@ -331,17 +331,17 @@ insert_acl_role_label(struct acl_role_label *role)
 		role->prev = polstate->role_list;
 		polstate->role_list = role;
 	}
-	
+
 	/* used for hash chains */
 	role->next = NULL;
 
-	if (role->roletype & GR_ROLE_DOMAIN) {
+	if (role->roletype & X_ROLE_DOMAIN) {
 		for (i = 0; i < role->domain_child_num; i++)
 			__insert_acl_role_label(role, role->domain_children[i]);
 	} else
 		__insert_acl_role_label(role, role->uidgid);
 }
-					
+
 static int
 insert_name_entry(char *name, const u64 inode, const dev_t device, __u8 deleted)
 {
@@ -353,7 +353,7 @@ insert_name_entry(char *name, const u64 inode, const dev_t device, __u8 deleted)
 
 	curr = &polstate->name_set.n_hash[index];
 
-	while (*curr && ((*curr)->key != key || !gr_streq((*curr)->name, name, (*curr)->len, len)))
+	while (*curr && ((*curr)->key != key || !x_streq((*curr)->name, name, (*curr)->len, len)))
 		curr = &((*curr)->next);
 
 	if (*curr != NULL)
@@ -419,7 +419,7 @@ create_table(__u32 * len, int elementsize)
 }
 
 static int
-init_variables(const struct gr_arg *arg, bool reload)
+init_variables(const struct x_arg *arg, bool reload)
 {
 	struct task_struct *reaper = init_pid_ns.child_reaper;
 	unsigned int stacksize;
@@ -434,7 +434,7 @@ init_variables(const struct gr_arg *arg, bool reload)
 		return 1;
 
 	if (!reload) {
-		if (!gr_init_uidset())
+		if (!x_init_uidset())
 			return 1;
 	}
 
@@ -447,21 +447,21 @@ init_variables(const struct gr_arg *arg, bool reload)
 
 	if (!reload) {
 		/* grab reference for the real root dentry and vfsmount */
-		get_fs_root(reaper->fs, &gr_real_root);
-	
-#ifdef CONFIG_GRKERNSEC_RBAC_DEBUG
-	printk(KERN_ALERT "Obtained real root device=%d, inode=%lu\n", gr_get_dev_from_dentry(gr_real_root.dentry), gr_get_ino_from_dentry(gr_real_root.dentry));
+		get_fs_root(reaper->fs, &x_real_root);
+
+#ifdef CONFIG_XKERNSEC_RBAC_DEBUG
+	printk(KERN_ALERT "Obtained real root device=%d, inode=%lu\n", x_get_dev_from_dentry(x_real_root.dentry), x_get_ino_from_dentry(x_real_root.dentry));
 #endif
 
 		fakefs_obj_rw = kzalloc(sizeof(struct acl_object_label), GFP_KERNEL);
 		if (fakefs_obj_rw == NULL)
 			return 1;
-		fakefs_obj_rw->mode = GR_FIND | GR_READ | GR_WRITE;
-	
+		fakefs_obj_rw->mode = X_FIND | X_READ | X_WRITE;
+
 		fakefs_obj_rwx = kzalloc(sizeof(struct acl_object_label), GFP_KERNEL);
 		if (fakefs_obj_rwx == NULL)
 			return 1;
-		fakefs_obj_rwx->mode = GR_FIND | GR_READ | GR_WRITE | GR_EXEC;
+		fakefs_obj_rwx->mode = X_FIND | X_READ | X_WRITE | X_EXEC;
 	}
 
 	polstate->subj_map_set.s_hash =
@@ -524,7 +524,7 @@ free_variables(bool reload)
 	unsigned int x;
 
 	if (!reload) {
-		gr_clear_learn_entries();
+		x_clear_learn_entries();
 
 		read_lock(&tasklist_lock);
 		do_each_thread(task2, task) {
@@ -543,7 +543,7 @@ free_variables(bool reload)
 
 		/* release the reference to the real root dentry and vfsmount */
 		path_put(&gr_real_root);
-		memset(&gr_real_root, 0, sizeof(gr_real_root));
+		memset(&gr_real_root, 0, sizeof(x_real_root));
 	}
 
 	/* free all object hash tables */
@@ -601,7 +601,7 @@ next_role:
 	}
 
 	if (!reload)
-		gr_free_uidset();
+		x_free_uidset();
 
 	memset(&polstate->name_set, 0, sizeof (struct name_db));
 	memset(&polstate->inodev_set, 0, sizeof (struct inodev_db));
@@ -787,7 +787,7 @@ copy_user_transitions(struct acl_role_label *rolep)
 
 		rusertp = rtmp->prev;
 
-		error = alloc_and_copy_string(&rtmp->rolename, GR_SPROLE_LEN);
+		error = alloc_and_copy_string(&rtmp->rolename, X_SPROLE_LEN);
 		if (error)
 			return error;
 
@@ -828,7 +828,7 @@ do_copy_user_subj(struct acl_subject_label *userp, struct acl_role_label *role, 
 	struct acl_subject_label *s_tmp = NULL, *s_tmp2;
 	__u32 num_objs;
 	struct acl_ip_label **i_tmp, *i_utmp2;
-	struct gr_hash_struct ghash;
+	struct x_hash_struct ghash;
 	struct subject_map *subjmap;
 	unsigned int i_num;
 	int err;
@@ -869,7 +869,7 @@ do_copy_user_subj(struct acl_subject_label *userp, struct acl_role_label *role, 
 	if (!strcmp(s_tmp->filename, "/"))
 		role->root_label = s_tmp;
 
-	if (copy_gr_hash_struct(&ghash, s_tmp->hash))
+	if (copy_x_hash_struct(&ghash, s_tmp->hash))
 		return ERR_PTR(-EFAULT);
 
 	/* copy user and group transition tables */
@@ -955,7 +955,7 @@ do_copy_user_subj(struct acl_subject_label *userp, struct acl_role_label *role, 
 
 		if (copy_acl_ip_label(*(i_tmp + i_num), i_utmp2))
 			return ERR_PTR(-EFAULT);
-		
+
 		if ((*(i_tmp + i_num))->iface == NULL)
 			continue;
 
@@ -968,7 +968,7 @@ do_copy_user_subj(struct acl_subject_label *userp, struct acl_role_label *role, 
 
 insert:
 	if (!insert_name_entry(s_tmp->filename, s_tmp->inode,
-			       s_tmp->device, (s_tmp->mode & GR_DELETED) ? 1 : 0))
+			       s_tmp->device, (s_tmp->mode & X_DELETED) ? 1 : 0))
 		return ERR_PTR(-ENOMEM);
 
 	return s_tmp;
@@ -984,7 +984,7 @@ copy_user_subjs(struct acl_subject_label *userp, struct acl_role_label *role)
 	while (userp) {
 		if (copy_acl_subject_label(&s_pre, userp))
 			return -EFAULT;
-		
+
 		ret = do_copy_user_subj(userp, role, NULL);
 
 		err = PTR_ERR(ret);
@@ -1000,12 +1000,12 @@ copy_user_subjs(struct acl_subject_label *userp, struct acl_role_label *role)
 }
 
 static int
-copy_user_acl(struct gr_arg *arg)
+copy_user_acl(struct x_arg *arg)
 {
 	struct acl_role_label *r_tmp = NULL, **r_utmp, *r_utmp2;
 	struct acl_subject_label *subj_list;
 	struct sprole_pw *sptmp;
-	struct gr_hash_struct *ghash;
+	struct x_hash_struct *ghash;
 	uid_t *domainlist;
 	unsigned int r_num;
 	int err = 0;
@@ -1031,11 +1031,11 @@ copy_user_acl(struct gr_arg *arg)
 		if (copy_sprole_pw(sptmp, i, arg->sprole_pws))
 			return -EFAULT;
 
-		err = alloc_and_copy_string((char **)&sptmp->rolename, GR_SPROLE_LEN);
+		err = alloc_and_copy_string((char **)&sptmp->rolename, X_SPROLE_LEN);
 		if (err)
 			return err;
 
-#ifdef CONFIG_GRKERNSEC_RBAC_DEBUG
+#ifdef CONFIG_XKERNSEC_RBAC_DEBUG
 		printk(KERN_ALERT "Copying special role %s\n", sptmp->rolename);
 #endif
 
@@ -1056,21 +1056,21 @@ copy_user_acl(struct gr_arg *arg)
 		if (copy_acl_role_label(r_tmp, r_utmp2))
 			return -EFAULT;
 
-		err = alloc_and_copy_string(&r_tmp->rolename, GR_SPROLE_LEN);
+		err = alloc_and_copy_string(&r_tmp->rolename, X_SPROLE_LEN);
 		if (err)
 			return err;
 
 		if (!strcmp(r_tmp->rolename, "default")
-		    && (r_tmp->roletype & GR_ROLE_DEFAULT)) {
+		    && (r_tmp->roletype & X_ROLE_DEFAULT)) {
 			polstate->default_role = r_tmp;
 		} else if (!strcmp(r_tmp->rolename, ":::kernel:::")) {
 			polstate->kernel_role = r_tmp;
 		}
 
-		if ((ghash = (struct gr_hash_struct *) acl_alloc(sizeof(struct gr_hash_struct))) == NULL)
+		if ((ghash = (struct x_hash_struct *) acl_alloc(sizeof(struct x_hash_struct))) == NULL)
 			return -ENOMEM;
 
-		if (copy_gr_hash_struct(ghash, r_tmp->hash))
+		if (copy_x_hash_struct(ghash, r_tmp->hash))
 			return -EFAULT;
 
 		r_tmp->hash = ghash;
@@ -1133,9 +1133,9 @@ copy_user_acl(struct gr_arg *arg)
 	return err;
 }
 
-static int gracl_reload_apply_policies(void *reload)
+static int xacl_reload_apply_policies(void *reload)
 {
-	struct gr_reload_state *reload_state = (struct gr_reload_state *)reload;
+	struct x_reload_state *reload_state = (struct x_reload_state *)reload;
 	struct task_struct *task, *task2;
 	struct acl_role_label *role, *rtmp;
 	struct acl_subject_label *subj;
@@ -1143,18 +1143,18 @@ static int gracl_reload_apply_policies(void *reload)
 	int role_applied;
 	int ret = 0;
 
-	memcpy(&reload_state->oldpolicy, reload_state->oldpolicy_ptr, sizeof(struct gr_policy_state));
-	memcpy(&reload_state->oldalloc, reload_state->oldalloc_ptr, sizeof(struct gr_alloc_state));
+	memcpy(&reload_state->oldpolicy, reload_state->oldpolicy_ptr, sizeof(struct x_policy_state));
+	memcpy(&reload_state->oldalloc, reload_state->oldalloc_ptr, sizeof(struct x_alloc_state));
 
 	/* first make sure we'll be able to apply the new policy cleanly */
 	do_each_thread(task2, task) {
 		if (task->exec_file == NULL)
 			continue;
 		role_applied = 0;
-		if (!reload_state->oldmode && task->role->roletype & GR_ROLE_SPECIAL) {
+		if (!reload_state->oldmode && task->role->roletype & X_ROLE_SPECIAL) {
 			/* preserve special roles */
 			FOR_EACH_ROLE_START(role)
-				if ((role->roletype & GR_ROLE_SPECIAL) && !strcmp(task->role->rolename, role->rolename)) {
+				if ((role->roletype & X_ROLE_SPECIAL) && !strcmp(task->role->rolename, role->rolename)) {
 					rtmp = task->role;
 					task->role = role;
 					role_applied = 1;
@@ -1165,12 +1165,12 @@ static int gracl_reload_apply_policies(void *reload)
 		if (!role_applied) {
 			cred = __task_cred(task);
 			rtmp = task->role;
-			task->role = __lookup_acl_role_label(polstate, task, GR_GLOBAL_UID(cred->uid), GR_GLOBAL_GID(cred->gid));
+			task->role = __lookup_acl_role_label(polstate, task, X_GLOBAL_UID(cred->uid), X_GLOBAL_GID(cred->gid));
 		}
 		/* this handles non-nested inherited subjects, nested subjects will still
 		   be dropped currently */
-		subj = __gr_get_subject_for_task(polstate, task, task->acl->filename, 1);
-		task->tmpacl = __gr_get_subject_for_task(polstate, task, NULL, 1);
+		subj = __x_get_subject_for_task(polstate, task, task->acl->filename, 1);
+		task->tmpacl = __x_get_subject_for_task(polstate, task, NULL, 1);
 		/* change the role back so that we've made no modifications to the policy */
 		task->role = rtmp;
 
@@ -1185,10 +1185,10 @@ static int gracl_reload_apply_policies(void *reload)
 	do_each_thread(task2, task) {
 		if (task->exec_file) {
 			role_applied = 0;
-			if (!reload_state->oldmode && task->role->roletype & GR_ROLE_SPECIAL) {
+			if (!reload_state->oldmode && task->role->roletype & X_ROLE_SPECIAL) {
 				/* preserve special roles */
 				FOR_EACH_ROLE_START(role)
-					if ((role->roletype & GR_ROLE_SPECIAL) && !strcmp(task->role->rolename, role->rolename)) {
+					if ((role->roletype & X_ROLE_SPECIAL) && !strcmp(task->role->rolename, role->rolename)) {
 						task->role = role;
 						role_applied = 1;
 						break;
@@ -1197,18 +1197,18 @@ static int gracl_reload_apply_policies(void *reload)
 			}
 			if (!role_applied) {
 				cred = __task_cred(task);
-				task->role = __lookup_acl_role_label(polstate, task, GR_GLOBAL_UID(cred->uid), GR_GLOBAL_GID(cred->gid));
+				task->role = __lookup_acl_role_label(polstate, task, X_GLOBAL_UID(cred->uid), X_GLOBAL_GID(cred->gid));
 			}
 			/* this handles non-nested inherited subjects, nested subjects will still
 			   be dropped currently */
 			if (!reload_state->oldmode && task->inherited)
-				subj = __gr_get_subject_for_task(polstate, task, task->acl->filename, 1);
+				subj = __x_get_subject_for_task(polstate, task, task->acl->filename, 1);
 			else {
 				/* looked up and tagged to the task previously */
 				subj = task->tmpacl;
 			}
 			/* subj will be non-null */
-			__gr_apply_subject_to_task(polstate, task, subj);
+			__x_apply_subject_to_task(polstate, task, subj);
 			if (reload_state->oldmode) {
 				task->acl_role_id = 0;
 				task->acl_sp_role = 0;
@@ -1218,23 +1218,23 @@ static int gracl_reload_apply_policies(void *reload)
 			// it's a kernel process
 			task->role = polstate->kernel_role;
 			task->acl = polstate->kernel_role->root_label;
-#ifdef CONFIG_GRKERNSEC_ACL_HIDEKERN
-			task->acl->mode &= ~GR_PROCFIND;
+#ifdef CONFIG_XKERNSEC_ACL_HIDEKERN
+			task->acl->mode &= ~X_PROCFIND;
 #endif
 		}
 	} while_each_thread(task2, task);
 
-	memcpy(reload_state->oldpolicy_ptr, &reload_state->newpolicy, sizeof(struct gr_policy_state));
-	memcpy(reload_state->oldalloc_ptr, &reload_state->newalloc, sizeof(struct gr_alloc_state));
+	memcpy(reload_state->oldpolicy_ptr, &reload_state->newpolicy, sizeof(struct x_policy_state));
+	memcpy(reload_state->oldalloc_ptr, &reload_state->newalloc, sizeof(struct x_alloc_state));
 
 out:
 
 	return ret;
 }
 
-static int gracl_reload(struct gr_arg *args, unsigned char oldmode)
+static int xacl_reload(struct x_arg *args, unsigned char oldmode)
 {
-	struct gr_reload_state new_reload_state = { };
+	struct x_reload_state new_reload_state = { };
 	int err;
 
 	new_reload_state.oldpolicy_ptr = polstate;
@@ -1246,7 +1246,7 @@ static int gracl_reload(struct gr_arg *args, unsigned char oldmode)
 
 	/* everything relevant is now saved off, copy in the new policy */
 	if (init_variables(args, true)) {
-		gr_log_str(GR_DONT_AUDIT_GOOD, GR_INITF_ACL_MSG, GR_VERSION);
+		x_log_str(X_DONT_AUDIT_GOOD, X_INITF_ACL_MSG, X_VERSION);
 		err = -ENOMEM;
 		goto error;
 	}
@@ -1260,7 +1260,7 @@ static int gracl_reload(struct gr_arg *args, unsigned char oldmode)
 	   then apply new subjects, making sure to preserve inherited and nested subjects,
 	   though currently only inherited subjects will be preserved
 	*/
-	err = stop_machine(gracl_reload_apply_policies, &new_reload_state, NULL);
+	err = stop_machine(xacl_reload_apply_policies, &new_reload_state, NULL);
 	if (err)
 		goto error;
 
@@ -1289,15 +1289,15 @@ out:
 }
 
 static int
-gracl_init(struct gr_arg *args)
+xacl_init(struct gr_arg *args)
 {
 	int error = 0;
 
-	memcpy(gr_system_salt, args->salt, GR_SALT_LEN);
-	memcpy(gr_system_sum, args->sum, GR_SHA_LEN);
+	memcpy(x_system_salt, args->salt, X_SALT_LEN);
+	memcpy(x_system_sum, args->sum, X_SHA_LEN);
 
 	if (init_variables(args, false)) {
-		gr_log_str(GR_DONT_AUDIT_GOOD, GR_INITF_ACL_MSG, GR_VERSION);
+		gr_log_str(X_DONT_AUDIT_GOOD, X_INITF_ACL_MSG, X_VERSION);
 		error = -ENOMEM;
 		goto out;
 	}
@@ -1307,11 +1307,11 @@ gracl_init(struct gr_arg *args)
 	if (error)
 		goto out;
 
-	error = gr_set_acls(0);
+	error = x_set_acls(0);
 	if (error)
 		goto out;
 
-	gr_enable_rbac_system();
+	x_enable_rbac_system();
 
 	return 0;
 
@@ -1350,7 +1350,7 @@ lookup_special_role_auth(__u16 mode, const char *rolename, unsigned char **salt,
 
 	FOR_EACH_ROLE_START(r)
 		if (!strcmp(rolename, r->rolename) &&
-		    (r->roletype & GR_ROLE_SPECIAL)) {
+		    (r->roletype & X_ROLE_SPECIAL)) {
 			found = 0;
 			if (r->allowed_ips != NULL) {
 				for (ipp = r->allowed_ips; ipp; ipp = ipp->next) {
@@ -1363,8 +1363,8 @@ lookup_special_role_auth(__u16 mode, const char *rolename, unsigned char **salt,
 			if (!found)
 				return 0;
 
-			if (((mode == GR_SPROLE) && (r->roletype & GR_ROLE_NOPW)) ||
-			    ((mode == GR_SPROLEPAM) && (r->roletype & GR_ROLE_PAM))) {
+			if (((mode == X_SPROLE) && (r->roletype & X_ROLE_NOPW)) ||
+			    ((mode == X_SPROLEPAM) && (r->roletype & X_ROLE_PAM))) {
 				*salt = NULL;
 				*sum = NULL;
 				return 1;
@@ -1383,7 +1383,7 @@ lookup_special_role_auth(__u16 mode, const char *rolename, unsigned char **salt,
 	return 0;
 }
 
-int gr_check_secure_terminal(struct task_struct *task)
+int x_check_secure_terminal(struct task_struct *task)
 {
 	struct task_struct *p, *p2, *p3;
 	struct files_struct *files;
@@ -1440,8 +1440,8 @@ int gr_check_secure_terminal(struct task_struct *task)
 				}
 				if (p3 == p)
 					break;
-				gr_log_ttysniff(GR_DONT_AUDIT_GOOD, GR_TTYSNIFF_ACL_MSG, p);
-				gr_handle_alertkill(p);
+				x_log_ttysniff(X_DONT_AUDIT_GOOD, X_TTYSNIFF_ACL_MSG, p);
+				x_handle_alertkill(p);
 				rcu_read_unlock();
 				put_files_struct(files);
 				read_unlock(&tasklist_lock);
@@ -1459,9 +1459,9 @@ int gr_check_secure_terminal(struct task_struct *task)
 }
 
 ssize_t
-write_grsec_handler(struct file *file, const char __user * buf, size_t count, loff_t *ppos)
+write_xsec_handler(struct file *file, const char __user * buf, size_t count, loff_t *ppos)
 {
-	struct gr_arg_wrapper uwrap;
+	struct x_arg_wrapper uwrap;
 	unsigned char *sprole_salt = NULL;
 	unsigned char *sprole_sum = NULL;
 	int error = 0;
@@ -1469,9 +1469,9 @@ write_grsec_handler(struct file *file, const char __user * buf, size_t count, lo
 	size_t req_count = 0;
 	unsigned char oldmode = 0;
 
-	mutex_lock(&gr_dev_mutex);
+	mutex_lock(&x_dev_mutex);
 
-	if (gr_acl_is_enabled() && !(current->acl->mode & GR_KERNELAUTH)) {
+	if (x_acl_is_enabled() && !(current->acl->mode & X_KERNELAUTH)) {
 		error = -EPERM;
 		goto out;
 	}
@@ -1479,8 +1479,8 @@ write_grsec_handler(struct file *file, const char __user * buf, size_t count, lo
 #ifdef CONFIG_COMPAT
 	pax_open_kernel();
 	if (in_compat_syscall()) {
-		copy_gr_arg_wrapper = &copy_gr_arg_wrapper_compat;
-		copy_gr_arg = &copy_gr_arg_compat;
+		copy_x_arg_wrapper = &copy_x_arg_wrapper_compat;
+		copy_x_arg = &copy_x_arg_compat;
 		copy_acl_object_label = &copy_acl_object_label_compat;
 		copy_acl_subject_label = &copy_acl_subject_label_compat;
 		copy_acl_role_label = &copy_acl_role_label_compat;
@@ -1488,12 +1488,12 @@ write_grsec_handler(struct file *file, const char __user * buf, size_t count, lo
 		copy_role_allowed_ip = &copy_role_allowed_ip_compat;
 		copy_role_transition = &copy_role_transition_compat;
 		copy_sprole_pw = &copy_sprole_pw_compat;
-		copy_gr_hash_struct = &copy_gr_hash_struct_compat;
+		copy_x_hash_struct = &copy_x_hash_struct_compat;
 		copy_pointer_from_array = &copy_pointer_from_array_compat;
-		get_gr_arg_wrapper_size = &get_gr_arg_wrapper_size_compat;
+		get_x_arg_wrapper_size = &get_x_arg_wrapper_size_compat;
 	} else {
-		copy_gr_arg_wrapper = &copy_gr_arg_wrapper_normal;
-		copy_gr_arg = &copy_gr_arg_normal;
+		copy_x_arg_wrapper = &copy_x_arg_wrapper_normal;
+		copy_x_arg = &copy_x_arg_normal;
 		copy_acl_object_label = &copy_acl_object_label_normal;
 		copy_acl_subject_label = &copy_acl_subject_label_normal;
 		copy_acl_role_label = &copy_acl_role_label_normal;
@@ -1501,38 +1501,38 @@ write_grsec_handler(struct file *file, const char __user * buf, size_t count, lo
 		copy_role_allowed_ip = &copy_role_allowed_ip_normal;
 		copy_role_transition = &copy_role_transition_normal;
 		copy_sprole_pw = &copy_sprole_pw_normal;
-		copy_gr_hash_struct = &copy_gr_hash_struct_normal;
+		copy_x_hash_struct = &copy_x_hash_struct_normal;
 		copy_pointer_from_array = &copy_pointer_from_array_normal;
-		get_gr_arg_wrapper_size = &get_gr_arg_wrapper_size_normal;
+		get_x_arg_wrapper_size = &get_x_arg_wrapper_size_normal;
 	}
 	pax_close_kernel();
 #endif
 
-	req_count = get_gr_arg_wrapper_size();
+	req_count = get_x_arg_wrapper_size();
 
 	if (count != req_count) {
-		gr_log_int_int(GR_DONT_AUDIT_GOOD, GR_DEV_ACL_MSG, (int)count, (int)req_count);
+		x_log_int_int(X_DONT_AUDIT_GOOD, X_DEV_ACL_MSG, (int)count, (int)req_count);
 		error = -EINVAL;
 		goto out;
 	}
 
-	
-	if (gr_auth_expires && time_after_eq(get_seconds(), gr_auth_expires)) {
-		gr_auth_expires = 0;
-		gr_auth_attempts = 0;
+
+	if (x_auth_expires && time_after_eq(get_seconds(), x_auth_expires)) {
+		x_auth_expires = 0;
+		x_auth_attempts = 0;
 	}
 
-	error = copy_gr_arg_wrapper(buf, &uwrap);
+	error = copy_x_arg_wrapper(buf, &uwrap);
 	if (error)
 		goto out;
 
-	error = copy_gr_arg(uwrap.arg, gr_usermode);
+	error = copy_x_arg(uwrap.arg, x_usermode);
 	if (error)
 		goto out;
 
-	if (gr_usermode->mode != GR_SPROLE && gr_usermode->mode != GR_SPROLEPAM &&
-	    gr_auth_attempts >= CONFIG_GRKERNSEC_ACL_MAXTRIES &&
-	    time_after(gr_auth_expires, get_seconds())) {
+	if (x_usermode->mode != X_SPROLE && x_usermode->mode != X_SPROLEPAM &&
+	    x_auth_attempts >= CONFIG_GRKERNSEC_ACL_MAXTRIES &&
+	    time_after(x_auth_expires, get_seconds())) {
 		error = -EBUSY;
 		goto out;
 	}
@@ -1542,108 +1542,108 @@ write_grsec_handler(struct file *file, const char __user * buf, size_t count, lo
 	   locking
 	 */
 
-	if (gr_usermode->mode != GR_SPROLE && gr_usermode->mode != GR_STATUS &&
-	    gr_usermode->mode != GR_UNSPROLE && gr_usermode->mode != GR_SPROLEPAM &&
-	    gr_is_global_nonroot(current_uid())) {
+	if (x_usermode->mode != X_SPROLE && x_usermode->mode != X_STATUS &&
+	    x_usermode->mode != X_UNSPROLE && x_usermode->mode != X_SPROLEPAM &&
+	    x_is_global_nonroot(current_uid())) {
 		error = -EPERM;
 		goto out;
 	}
 
 	/* ensure pw and special role name are null terminated */
 
-	gr_usermode->pw[GR_PW_LEN - 1] = '\0';
-	gr_usermode->sp_role[GR_SPROLE_LEN - 1] = '\0';
+	x_usermode->pw[X_PW_LEN - 1] = '\0';
+	x_usermode->sp_role[X_SPROLE_LEN - 1] = '\0';
 
-	/* Okay. 
+	/* Okay.
 	 * We have our enough of the argument structure..(we have yet
 	 * to copy_from_user the tables themselves) . Copy the tables
 	 * only if we need them, i.e. for loading operations. */
 
-	switch (gr_usermode->mode) {
-	case GR_STATUS:
-			if (gr_acl_is_enabled()) {
+	switch (x_usermode->mode) {
+	case X_STATUS:
+			if (x_acl_is_enabled()) {
 				error = 1;
-				if (!gr_check_secure_terminal(current))
+				if (!x_check_secure_terminal(current))
 					error = 3;
 			} else
 				error = 2;
 			goto out;
-	case GR_SHUTDOWN:
-		if (gr_acl_is_enabled() && !(chkpw(gr_usermode, gr_system_salt, gr_system_sum))) {
-			stop_machine(gr_rbac_disable, NULL, NULL);
+	case X_SHUTDOWN:
+		if (x_acl_is_enabled() && !(chkpw(x_usermode, x_system_salt, x_system_sum))) {
+			stop_machine(x_rbac_disable, NULL, NULL);
 			free_variables(false);
-			memset(gr_usermode, 0, sizeof(struct gr_arg));
-			memset(gr_system_salt, 0, GR_SALT_LEN);
-			memset(gr_system_sum, 0, GR_SHA_LEN);
-			gr_log_noargs(GR_DONT_AUDIT_GOOD, GR_SHUTS_ACL_MSG);
-		} else if (gr_acl_is_enabled()) {
-			gr_log_noargs(GR_DONT_AUDIT, GR_SHUTF_ACL_MSG);
+			memset(x_usermode, 0, sizeof(struct x_arg));
+			memset(x_system_salt, 0, X_SALT_LEN);
+			memset(x_system_sum, 0, X_SHA_LEN);
+			x_log_noargs(X_DONT_AUDIT_GOOD, X_SHUTS_ACL_MSG);
+		} else if (x_acl_is_enabled()) {
+			x_log_noargs(X_DONT_AUDIT, X_SHUTF_ACL_MSG);
 			error = -EPERM;
 		} else {
-			gr_log_noargs(GR_DONT_AUDIT_GOOD, GR_SHUTI_ACL_MSG);
+			x_log_noargs(X_DONT_AUDIT_GOOD, X_SHUTI_ACL_MSG);
 			error = -EAGAIN;
 		}
 		break;
-	case GR_ENABLE:
-		if (!gr_acl_is_enabled() && !(error2 = gracl_init(gr_usermode)))
-			gr_log_str(GR_DONT_AUDIT_GOOD, GR_ENABLE_ACL_MSG, GR_VERSION);
+	case X_ENABLE:
+		if (!x_acl_is_enabled() && !(error2 = xacl_init(x_usermode)))
+			x_log_str(X_DONT_AUDIT_GOOD, X_ENABLE_ACL_MSG, X_VERSION);
 		else {
-			if (gr_acl_is_enabled())
+			if (x_acl_is_enabled())
 				error = -EAGAIN;
 			else
 				error = error2;
-			gr_log_str(GR_DONT_AUDIT, GR_ENABLEF_ACL_MSG, GR_VERSION);
+			x_log_str(X_DONT_AUDIT, X_ENABLEF_ACL_MSG, X_VERSION);
 		}
 		break;
-	case GR_OLDRELOAD:
+	case X_OLDRELOAD:
 		oldmode = 1;
-	case GR_RELOAD:
-		if (!gr_acl_is_enabled()) {
-			gr_log_str(GR_DONT_AUDIT_GOOD, GR_RELOADI_ACL_MSG, GR_VERSION);
+	case X_RELOAD:
+		if (!x_acl_is_enabled()) {
+			x_log_str(X_DONT_AUDIT_GOOD, X_RELOADI_ACL_MSG, X_VERSION);
 			error = -EAGAIN;
-		} else if (!(chkpw(gr_usermode, gr_system_salt, gr_system_sum))) {
-			error2 = gracl_reload(gr_usermode, oldmode);
+		} else if (!(chkpw(x_usermode, x_system_salt, x_system_sum))) {
+			error2 = xacl_reload(x_usermode, oldmode);
 			if (!error2)
-				gr_log_str(GR_DONT_AUDIT_GOOD, GR_RELOAD_ACL_MSG, GR_VERSION);
+				x_log_str(X_DONT_AUDIT_GOOD, X_RELOAD_ACL_MSG, X_VERSION);
 			else {
-				gr_log_str(GR_DONT_AUDIT, GR_RELOADF_ACL_MSG, GR_VERSION);
+				x_log_str(X_DONT_AUDIT, X_RELOADF_ACL_MSG, X_VERSION);
 				error = error2;
 			}
 		} else {
-			gr_log_str(GR_DONT_AUDIT, GR_RELOADF_ACL_MSG, GR_VERSION);
+			x_log_str(X_DONT_AUDIT, X_RELOADF_ACL_MSG, X_VERSION);
 			error = -EPERM;
 		}
 		break;
-	case GR_SEGVMOD:
-		if (unlikely(!gr_acl_is_enabled())) {
-			gr_log_noargs(GR_DONT_AUDIT_GOOD, GR_SEGVMODI_ACL_MSG);
+	case X_SEGVMOD:
+		if (unlikely(!x_acl_is_enabled())) {
+			x_log_noargs(X_DONT_AUDIT_GOOD, X_SEGVMODI_ACL_MSG);
 			error = -EAGAIN;
 			break;
 		}
 
-		if (!(chkpw(gr_usermode, gr_system_salt, gr_system_sum))) {
-			gr_log_noargs(GR_DONT_AUDIT_GOOD, GR_SEGVMODS_ACL_MSG);
-			if (gr_usermode->segv_device && gr_usermode->segv_inode) {
+		if (!(chkpw(x_usermode, x_system_salt, x_system_sum))) {
+			x_log_noargs(X_DONT_AUDIT_GOOD, X_SEGVMODS_ACL_MSG);
+			if (x_usermode->segv_device && x_usermode->segv_inode) {
 				struct acl_subject_label *segvacl;
 				segvacl =
-				    lookup_acl_subj_label(gr_usermode->segv_inode,
-							  gr_usermode->segv_device,
+				    lookup_acl_subj_label(x_usermode->segv_inode,
+							  x_usermode->segv_device,
 							  current->role);
 				if (segvacl) {
 					segvacl->crashes = 0;
 					segvacl->expires = 0;
 				}
 			} else
-				gr_find_and_remove_uid(gr_usermode->segv_uid);
+				x_find_and_remove_uid(x_usermode->segv_uid);
 		} else {
-			gr_log_noargs(GR_DONT_AUDIT, GR_SEGVMODF_ACL_MSG);
+			x_log_noargs(X_DONT_AUDIT, X_SEGVMODF_ACL_MSG);
 			error = -EPERM;
 		}
 		break;
-	case GR_SPROLE:
-	case GR_SPROLEPAM:
-		if (unlikely(!gr_acl_is_enabled())) {
-			gr_log_noargs(GR_DONT_AUDIT_GOOD, GR_SPROLEI_ACL_MSG);
+	case X_SPROLE:
+	case X_SPROLEPAM:
+		if (unlikely(!x_acl_is_enabled())) {
+			x_log_noargs(X_DONT_AUDIT_GOOD, X_SPROLEI_ACL_MSG);
 			error = -EAGAIN;
 			break;
 		}
@@ -1653,41 +1653,41 @@ write_grsec_handler(struct file *file, const char __user * buf, size_t count, lo
 			current->role->auth_attempts = 0;
 		}
 
-		if (current->role->auth_attempts >= CONFIG_GRKERNSEC_ACL_MAXTRIES &&
+		if (current->role->auth_attempts >= CONFIG_XKERNSEC_ACL_MAXTRIES &&
 		    time_after(current->role->expires, get_seconds())) {
 			error = -EBUSY;
 			goto out;
 		}
 
 		if (lookup_special_role_auth
-		    (gr_usermode->mode, (const char *)gr_usermode->sp_role, &sprole_salt, &sprole_sum)
+		    (x_usermode->mode, (const char *)x_usermode->sp_role, &sprole_salt, &sprole_sum)
 		    && ((!sprole_salt && !sprole_sum)
-			|| !(chkpw(gr_usermode, sprole_salt, sprole_sum)))) {
+			|| !(chkpw(x_usermode, sprole_salt, sprole_sum)))) {
 			char *p = "";
-			assign_special_role((const char *)gr_usermode->sp_role);
+			assign_special_role((const char *)x_usermode->sp_role);
 			read_lock(&tasklist_lock);
 			if (current->real_parent)
 				p = current->real_parent->role->rolename;
 			read_unlock(&tasklist_lock);
-			gr_log_str_int(GR_DONT_AUDIT_GOOD, GR_SPROLES_ACL_MSG,
+			x_log_str_int(X_DONT_AUDIT_GOOD, X_SPROLES_ACL_MSG,
 					p, acl_sp_role_value);
 		} else {
-			gr_log_str(GR_DONT_AUDIT, GR_SPROLEF_ACL_MSG, gr_usermode->sp_role);
+			x_log_str(X_DONT_AUDIT, X_SPROLEF_ACL_MSG, x_usermode->sp_role);
 			error = -EPERM;
 			if(!(current->role->auth_attempts++))
-				current->role->expires = get_seconds() + CONFIG_GRKERNSEC_ACL_TIMEOUT;
+				current->role->expires = get_seconds() + CONFIG_XKERNSEC_ACL_TIMEOUT;
 
 			goto out;
 		}
 		break;
-	case GR_UNSPROLE:
-		if (unlikely(!gr_acl_is_enabled())) {
-			gr_log_noargs(GR_DONT_AUDIT_GOOD, GR_UNSPROLEI_ACL_MSG);
+	case X_UNSPROLE:
+		if (unlikely(!x_acl_is_enabled())) {
+			x_log_noargs(X_DONT_AUDIT_GOOD, X_UNSPROLEI_ACL_MSG);
 			error = -EAGAIN;
 			break;
 		}
 
-		if (current->role->roletype & GR_ROLE_SPECIAL) {
+		if (current->role->roletype & X_ROLE_SPECIAL) {
 			char *p = "";
 			int i = 0;
 
@@ -1698,15 +1698,15 @@ write_grsec_handler(struct file *file, const char __user * buf, size_t count, lo
 			}
 			read_unlock(&tasklist_lock);
 
-			gr_log_str_int(GR_DONT_AUDIT_GOOD, GR_UNSPROLES_ACL_MSG, p, i);
-			gr_set_acls(1);
+			x_log_str_int(X_DONT_AUDIT_GOOD, X_UNSPROLES_ACL_MSG, p, i);
+			x_set_acls(1);
 		} else {
 			error = -EPERM;
 			goto out;
 		}
 		break;
 	default:
-		gr_log_int(GR_DONT_AUDIT, GR_INVMODE_ACL_MSG, gr_usermode->mode);
+		x_log_int(X_DONT_AUDIT, X_INVMODE_ACL_MSG, x_usermode->mode);
 		error = -EINVAL;
 		break;
 	}
@@ -1714,11 +1714,11 @@ write_grsec_handler(struct file *file, const char __user * buf, size_t count, lo
 	if (error != -EPERM)
 		goto out;
 
-	if(!(gr_auth_attempts++))
-		gr_auth_expires = get_seconds() + CONFIG_GRKERNSEC_ACL_TIMEOUT;
+	if(!(x_auth_attempts++))
+		x_auth_expires = get_seconds() + CONFIG_XKERNSEC_ACL_TIMEOUT;
 
       out:
-	mutex_unlock(&gr_dev_mutex);
+	mutex_unlock(&x_dev_mutex);
 
 	if (!error)
 		error = req_count;
@@ -1727,7 +1727,7 @@ write_grsec_handler(struct file *file, const char __user * buf, size_t count, lo
 }
 
 int
-gr_set_acls(const int type)
+x_set_acls(const int type)
 {
 	struct task_struct *task, *task2;
 	struct acl_role_label *role = current->role;
@@ -1738,7 +1738,7 @@ gr_set_acls(const int type)
 
 	rcu_read_lock();
 	read_lock(&tasklist_lock);
-	read_lock(&grsec_exec_file_lock);
+	read_lock(&xsec_exec_file_lock);
 	do_each_thread(task2, task) {
 		/* check to see if we're called from the exit handler,
 		   if so, only replace ACLs that have inherited the admin
@@ -1754,23 +1754,23 @@ gr_set_acls(const int type)
 
 		if (task->exec_file) {
 			cred = __task_cred(task);
-			task->role = __lookup_acl_role_label(polstate, task, GR_GLOBAL_UID(cred->uid), GR_GLOBAL_GID(cred->gid));
-			subj = __gr_get_subject_for_task(polstate, task, NULL, 1);
+			task->role = __lookup_acl_role_label(polstate, task, X_GLOBAL_UID(cred->uid), X_GLOBAL_GID(cred->gid));
+			subj = __x_get_subject_for_task(polstate, task, NULL, 1);
 			if (subj == NULL) {
 				ret = -EINVAL;
-				read_unlock(&grsec_exec_file_lock);
+				read_unlock(&xsec_exec_file_lock);
 				read_unlock(&tasklist_lock);
 				rcu_read_unlock();
-				gr_log_str_int(GR_DONT_AUDIT_GOOD, GR_DEFACL_MSG, task->comm, task_pid_nr(task));
+				x_log_str_int(X_DONT_AUDIT_GOOD, X_DEFACL_MSG, task->comm, task_pid_nr(task));
 				return ret;
 			}
-			__gr_apply_subject_to_task(polstate, task, subj);
+			__x_apply_subject_to_task(polstate, task, subj);
 		} else {
 			// it's a kernel process
 			task->role = polstate->kernel_role;
 			task->acl = polstate->kernel_role->root_label;
-#ifdef CONFIG_GRKERNSEC_ACL_HIDEKERN
-			task->acl->mode &= ~GR_PROCFIND;
+#ifdef CONFIG_XKERNSEC_ACL_HIDEKERN
+			task->acl->mode &= ~X_PROCFIND;
 #endif
 		}
 	} while_each_thread(task2, task);

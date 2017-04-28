@@ -2,8 +2,8 @@
 #include <linux/sched.h>
 #include <linux/fs.h>
 #include <linux/delay.h>
-#include <linux/grsecurity.h>
-#include <linux/grinternal.h>
+#include <linux/xsecurity.h>
+#include <linux/xinternal.h>
 #include <linux/hardirq.h>
 #include <asm/pgtable.h>
 
@@ -15,15 +15,15 @@ char *signames[] = {
 };
 
 void
-gr_log_signal(const int sig, const void *addr, const struct task_struct *t)
+x_log_signal(const int sig, const void *addr, const struct task_struct *t)
 {
-#ifdef CONFIG_GRKERNSEC_SIGNAL
-	if (grsec_enable_signal && ((sig == SIGSEGV) || (sig == SIGILL) ||
+#ifdef CONFIG_XKERNSEC_SIGNAL
+	if (xsec_enable_signal && ((sig == SIGSEGV) || (sig == SIGILL) ||
 				    (sig == SIGABRT) || (sig == SIGBUS))) {
 		if (task_pid_nr(t) == task_pid_nr(current)) {
-			gr_log_sig_addr(GR_DONT_AUDIT_GOOD, GR_UNISIGLOG_MSG, signames[sig], addr);
+			x_log_sig_addr(X_DONT_AUDIT_GOOD, X_UNISIGLOG_MSG, signames[sig], addr);
 		} else {
-			gr_log_sig_task(GR_DONT_AUDIT_GOOD, GR_DUALSIGLOG_MSG, t, sig);
+			x_log_sig_task(X_DONT_AUDIT_GOOD, X_DUALSIGLOG_MSG, t, sig);
 		}
 	}
 #endif
@@ -31,24 +31,24 @@ gr_log_signal(const int sig, const void *addr, const struct task_struct *t)
 }
 
 int
-gr_handle_signal(const struct task_struct *p, const int sig)
+x_handle_signal(const struct task_struct *p, const int sig)
 {
-#ifdef CONFIG_GRKERNSEC
+#ifdef CONFIG_XKERNSEC
 	/* ignore the 0 signal for protected task checks */
-	if (task_pid_nr(current) > 1 && sig && gr_check_protected_task(p)) {
-		gr_log_sig_task(GR_DONT_AUDIT, GR_SIG_ACL_MSG, p, sig);
+	if (task_pid_nr(current) > 1 && sig && x_check_protected_task(p)) {
+		x_log_sig_task(X_DONT_AUDIT, X_SIG_ACL_MSG, p, sig);
 		return -EPERM;
-	} else if (gr_pid_is_chrooted((struct task_struct *)p)) {
+	} else if (x_pid_is_chrooted((struct task_struct *)p)) {
 		return -EPERM;
 	}
 #endif
 	return 0;
 }
 
-#ifdef CONFIG_GRKERNSEC
+#ifdef CONFIG_XKERNSEC
 extern int specific_send_sig_info(int sig, struct siginfo *info, struct task_struct *t);
 
-int gr_fake_force_sig(int sig, struct task_struct *t)
+int x_fake_force_sig(int sig, struct task_struct *t)
 {
 	unsigned long int flags;
 	int ret, blocked, ignored;
@@ -75,18 +75,18 @@ int gr_fake_force_sig(int sig, struct task_struct *t)
 }
 #endif
 
-#define GR_USER_BAN_TIME (15 * 60)
-#define GR_DAEMON_BRUTE_TIME (30 * 60)
+#define X_USER_BAN_TIME (15 * 60)
+#define X_DAEMON_BRUTE_TIME (30 * 60)
 
-void gr_handle_brute_attach(int dumpable)
+void x_handle_brute_attach(int dumpable)
 {
-#ifdef CONFIG_GRKERNSEC_BRUTE
+#ifdef CONFIG_XKERNSEC_BRUTE
 	struct task_struct *p = current;
 	kuid_t uid = GLOBAL_ROOT_UID;
 	int is_priv = 0;
 	int daemon = 0;
 
-	if (!grsec_enable_brute)
+	if (!xsec_enable_brute)
 		return;
 
 	if (is_privileged_binary(p->mm->exe_file->f_path.dentry))
@@ -94,16 +94,16 @@ void gr_handle_brute_attach(int dumpable)
 
 	rcu_read_lock();
 	read_lock(&tasklist_lock);
-	read_lock(&grsec_exec_file_lock);
-	if (!is_priv && p->real_parent && gr_is_same_file(p->real_parent->exec_file, p->exec_file)) {
-		p->real_parent->brute_expires = get_seconds() + GR_DAEMON_BRUTE_TIME;
+	read_lock(&xsec_exec_file_lock);
+	if (!is_priv && p->real_parent && x_is_same_file(p->real_parent->exec_file, p->exec_file)) {
+		p->real_parent->brute_expires = get_seconds() + X_DAEMON_BRUTE_TIME;
 		p->real_parent->brute = 1;
 		daemon = 1;
 	} else {
 		const struct cred *cred = __task_cred(p), *cred2;
 		struct task_struct *tsk, *tsk2;
 
-		if (dumpable != SUID_DUMP_USER && gr_is_global_nonroot(cred->uid)) {
+		if (dumpable != SUID_DUMP_USER && x_is_global_nonroot(cred->uid)) {
 			struct user_struct *user;
 
 			uid = cred->uid;
@@ -113,39 +113,39 @@ void gr_handle_brute_attach(int dumpable)
 			if (user == NULL)
 				goto unlock;
 			user->sugid_banned = 1;
-			user->sugid_ban_expires = get_seconds() + GR_USER_BAN_TIME;
+			user->sugid_ban_expires = get_seconds() + X_USER_BAN_TIME;
 			if (user->sugid_ban_expires == ~0UL)
 				user->sugid_ban_expires--;
 
 			/* only kill other threads of the same binary, from the same user */
 			do_each_thread(tsk2, tsk) {
 				cred2 = __task_cred(tsk);
-				if (tsk != p && uid_eq(cred2->uid, uid) && gr_is_same_file(tsk->exec_file, p->exec_file))
-					gr_fake_force_sig(SIGKILL, tsk);
+				if (tsk != p && uid_eq(cred2->uid, uid) && x_is_same_file(tsk->exec_file, p->exec_file))
+					x_fake_force_sig(SIGKILL, tsk);
 			} while_each_thread(tsk2, tsk);
 		}
 	}
 unlock:
-	read_unlock(&grsec_exec_file_lock);
+	read_unlock(&xsec_exec_file_lock);
 	read_unlock(&tasklist_lock);
 	rcu_read_unlock();
 
-	if (gr_is_global_nonroot(uid))
-		gr_log_fs_int2(GR_DONT_AUDIT, GR_BRUTE_SUID_MSG, p->exec_file->f_path.dentry, p->exec_file->f_path.mnt, GR_GLOBAL_UID(uid), GR_USER_BAN_TIME / 60);
+	if (x_is_global_nonroot(uid))
+		x_log_fs_int2(X_DONT_AUDIT, X_BRUTE_SUID_MSG, p->exec_file->f_path.dentry, p->exec_file->f_path.mnt, X_GLOBAL_UID(uid), X_USER_BAN_TIME / 60);
 	else if (daemon)
-		gr_log_noargs(GR_DONT_AUDIT, GR_BRUTE_DAEMON_MSG);
+		x_log_noargs(X_DONT_AUDIT, X_BRUTE_DAEMON_MSG);
 
 #endif
 	return;
 }
 
-void gr_handle_brute_check(void)
+void x_handle_brute_check(void)
 {
-#ifdef CONFIG_GRKERNSEC_BRUTE
+#ifdef CONFIG_XKERNSEC_BRUTE
 	struct task_struct *p = current;
 
 	if (unlikely(p->brute)) {
-		if (!grsec_enable_brute)
+		if (!xsec_enable_brute)
 			p->brute = 0;
 		else if (time_before(get_seconds(), p->brute_expires))
 			msleep(30 * 1000);
@@ -154,9 +154,9 @@ void gr_handle_brute_check(void)
 	return;
 }
 
-void gr_handle_kernel_exploit(void)
+void x_handle_kernel_exploit(void)
 {
-#ifdef CONFIG_GRKERNSEC_KERN_LOCKOUT
+#ifdef CONFIG_XKERNSEC_KERN_LOCKOUT
 	static unsigned int num_banned_users __read_only;
 	const struct cred *cred;
 	struct task_struct *tsk, *tsk2;
@@ -164,25 +164,25 @@ void gr_handle_kernel_exploit(void)
 	kuid_t uid;
 
 	if (in_irq() || in_serving_softirq() || in_nmi())
-		panic("grsec: halting the system due to suspicious kernel crash caused in interrupt context");
+		panic("xsec: halting the system due to suspicious kernel crash caused in interrupt context");
 
 	uid = current_uid();
 
-	if (gr_is_global_root(uid))
-		panic("grsec: halting the system due to suspicious kernel crash caused by root");
+	if (x_is_global_root(uid))
+		panic("xsec: halting the system due to suspicious kernel crash caused by root");
 	else {
 		pax_open_kernel();
 		num_banned_users++;
 		pax_close_kernel();
 		if (num_banned_users > 8)
-			panic("grsec: halting the system due to suspicious kernel crash caused by a large number of different users");
+			panic("xsec: halting the system due to suspicious kernel crash caused by a large number of different users");
 
 		/* kill all the processes of this user, hold a reference
 		   to their creds struct, and prevent them from creating
 		   another process until system reset
 		*/
-		printk(KERN_ALERT "grsec: banning user with uid %u until system restart for suspicious kernel crash\n",
-			GR_GLOBAL_UID(uid));
+		printk(KERN_ALERT "xsec: banning user with uid %u until system restart for suspicious kernel crash\n",
+			X_GLOBAL_UID(uid));
 		/* we intentionally leak this ref */
 		user = get_uid(current->cred->user);
 		if (user)
@@ -193,14 +193,14 @@ void gr_handle_kernel_exploit(void)
 		do_each_thread(tsk2, tsk) {
 			cred = __task_cred(tsk);
 			if (uid_eq(cred->uid, uid))
-				gr_fake_force_sig(SIGKILL, tsk);
+				x_fake_force_sig(SIGKILL, tsk);
 		} while_each_thread(tsk2, tsk);
-		read_unlock(&tasklist_lock); 
+		read_unlock(&tasklist_lock);
 	}
 #endif
 }
 
-#ifdef CONFIG_GRKERNSEC_BRUTE
+#ifdef CONFIG_XKERNSEC_BRUTE
 static bool sugid_ban_expired(struct user_struct *user)
 {
 	if (user->sugid_ban_expires != ~0UL && time_after_eq(get_seconds(), user->sugid_ban_expires)) {
@@ -214,27 +214,27 @@ static bool sugid_ban_expired(struct user_struct *user)
 }
 #endif
 
-int gr_process_kernel_exec_ban(void)
+int x_process_kernel_exec_ban(void)
 {
-#ifdef CONFIG_GRKERNSEC_KERN_LOCKOUT
+#ifdef CONFIG_XKERNSEC_KERN_LOCKOUT
 	if (unlikely(current->cred->user->kernel_banned))
 		return -EPERM;
 #endif
 	return 0;
 }
 
-int gr_process_kernel_setuid_ban(struct user_struct *user)
+int x_process_kernel_setuid_ban(struct user_struct *user)
 {
-#ifdef CONFIG_GRKERNSEC_KERN_LOCKOUT
+#ifdef CONFIG_XKERNSEC_KERN_LOCKOUT
 	if (unlikely(user->kernel_banned))
-		gr_fake_force_sig(SIGKILL, current);
+		x_fake_force_sig(SIGKILL, current);
 #endif
 	return 0;
 }
 
-int gr_process_sugid_exec_ban(const struct linux_binprm *bprm)
+int x_process_sugid_exec_ban(const struct linux_binprm *bprm)
 {
-#ifdef CONFIG_GRKERNSEC_BRUTE
+#ifdef CONFIG_XKERNSEC_BRUTE
 	struct user_struct *user = current->cred->user;
 	if (unlikely(user->sugid_banned)) {
 		if (sugid_ban_expired(user))

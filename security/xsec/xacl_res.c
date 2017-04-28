@@ -1,7 +1,7 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
-#include <linux/gracl.h>
-#include <linux/grinternal.h>
+#include <linux/xacl.h>
+#include <linux/xinternal.h>
 
 static const char *restab_log[] = {
 	[RLIMIT_CPU] = "RLIMIT_CPU",
@@ -20,17 +20,17 @@ static const char *restab_log[] = {
 	[RLIMIT_NICE] = "RLIMIT_NICE",
 	[RLIMIT_RTPRIO] = "RLIMIT_RTPRIO",
 	[RLIMIT_RTTIME] = "RLIMIT_RTTIME",
-	[GR_CRASH_RES] = "RLIMIT_CRASH"
+	[X_CRASH_RES] = "RLIMIT_CRASH"
 };
 
 void
-gr_log_resource(const struct task_struct *task,
+x_log_resource(const struct task_struct *task,
 		const int res, const unsigned long wanted, const int gt)
 {
 	const struct cred *cred;
 	unsigned long rlim;
 
-	if (!gr_acl_is_enabled() && !grsec_resource_logging)
+	if (!x_acl_is_enabled() && !xsec_resource_logging)
 		return;
 
 	// not yet supported resource
@@ -56,8 +56,8 @@ gr_log_resource(const struct task_struct *task,
 	rcu_read_lock();
 	cred = __task_cred(task);
 
-	if (res == RLIMIT_NPROC && 
-	    (cap_raised(cred->cap_effective, CAP_SYS_ADMIN) || 
+	if (res == RLIMIT_NPROC &&
+	    (cap_raised(cred->cap_effective, CAP_SYS_ADMIN) ||
 	     cap_raised(cred->cap_effective, CAP_SYS_RESOURCE)))
 		goto out_rcu_unlock;
 	else if (res == RLIMIT_MEMLOCK &&
@@ -65,7 +65,7 @@ gr_log_resource(const struct task_struct *task,
 		goto out_rcu_unlock;
 	rcu_read_unlock();
 
-	gr_log_res_ulong2_str(GR_DONT_AUDIT, GR_RESOURCE_MSG, task, wanted, restab_log[res], rlim);
+	x_log_res_ulong2_str(X_DONT_AUDIT, X_RESOURCE_MSG, task, wanted, restab_log[res], rlim);
 
 	return;
 out_rcu_unlock:

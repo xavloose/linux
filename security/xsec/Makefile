@@ -18,37 +18,37 @@
 
 KBUILD_CFLAGS = -Werror
 
-obj-y = grsec_chdir.o grsec_chroot.o grsec_exec.o grsec_fifo.o grsec_fork.o \
-	grsec_mount.o grsec_sig.o grsec_sysctl.o \
-	grsec_time.o grsec_tpe.o grsec_link.o grsec_pax.o grsec_ptrace.o \
-	grsec_usb.o grsec_ipc.o grsec_proc.o grsec_tty.o
+obj-y = xsec_chdir.o xsec_chroot.o xsec_exec.o xsec_fifo.o xsec_fork.o \
+	xsec_mount.o xsec_sig.o xsec_sysctl.o \
+	xsec_time.o xsec_tpe.o xsec_link.o xsec_pax.o xsec_ptrace.o \
+	xsec_usb.o xsec_ipc.o xsec_proc.o xsec_tty.o
 
-obj-$(CONFIG_GRKERNSEC) = grsec_init.o grsum.o gracl.o gracl_segv.o \
-	gracl_cap.o gracl_alloc.o gracl_shm.o grsec_mem.o gracl_fs.o \
-	gracl_learn.o grsec_log.o gracl_policy.o
+obj-$(CONFIG_XKERNSEC) = xsec_init.o xsum.o xacl.o xacl_segv.o \
+	xacl_cap.o xacl_alloc.o xacl_shm.o xsec_mem.o xacl_fs.o \
+	xacl_learn.o xsec_log.o xacl_policy.o
 ifdef CONFIG_COMPAT
-obj-$(CONFIG_GRKERNSEC) = gracl_compat.o
+obj-$(CONFIG_XKERNSEC) = xacl_compat.o
 endif
 
-obj-$(CONFIG_GRKERNSEC_RESLOG) = gracl_res.o
+obj-$(CONFIG_XKERNSEC_RESLOG) = xacl_res.o
 
 ifdef CONFIG_NET
-obj-y = grsec_sock.o
-obj-$(CONFIG_GRKERNSEC) = gracl_ip.o
+obj-y = xsec_sock.o
+obj-$(CONFIG_XKERNSEC) = xacl_ip.o
 endif
 
-ifndef CONFIG_GRKERNSEC
-obj-y = grsec_disabled.o
+ifndef CONFIG_XKERNSEC
+obj-y = xsec_disabled.o
 endif
 
-ifdef CONFIG_GRKERNSEC_HIDESYM
-extra-y := grsec_hidesym.o
-$(obj)/grsec_hidesym.o:
+ifdef CONFIG_XKERNSEC_HIDESYM
+extra-y := xsec_hidesym.o
+$(obj)/xsec_hidesym.o:
 	@-chmod -f 500 /boot
 	@-chmod -f 500 /lib/modules
 	@-chmod -f 500 /lib64/modules
 	@-chmod -f 500 /lib32/modules
 	@-chmod -f 700 .
 	@-chmod -f 700 $(objtree)
-	@echo '  grsec: protected kernel image paths'
+	@echo '  xsec: protected kernel image paths'
 endif

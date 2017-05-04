@@ -1,0 +1,22 @@
+New arguments and vars
+XSEC_PRINTF - printf c hardener. It's a macro
+
+Other Notes:
+
+Changed Files Without Changes:
+  /*I SHOULD HAVE PAID MORE ATTENTION HERE*/
+  //MAY BE NOTHING
+  /include/asm-generic/4level-fixup.h
+  /include/asm-generic/atomic-long.h
+  /include/asm-generic/atomic64.h
+  /*WELLLLLLLL I FIGURED OUT AFTER THIS....*/
+  /include/asm-generic/bitmops/__fls.h
+
+Changed Files With TODO's:
+  /include/asm-generic/4levelfixup.h
+
+Changed Files With new vars:
+XSEC_PRINTF && XSEC_ATOMIC_UNCHECKED && XSEC_NOCAPTURE
+  /include/acpi/acpiosxf.h
+  /include/acpi/acpixf.h
+  /include/acpi/ghes.h

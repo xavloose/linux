@@ -9,7 +9,11 @@
  *
  * Undefined if no set bit exists, so code should check against 0 first.
  */
+#ifdef XSEC_INTENTIONAL_OVERFLOW
+static __always_inline unsigned long __intentional_overflow(-1) __fls(unsigned long word)
+#else
 static __always_inline unsigned long __fls(unsigned long word)
+#endif
 {
 	int num = BITS_PER_LONG - 1;
 

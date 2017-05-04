@@ -30,7 +30,7 @@ struct ghes_estatus_node {
 	struct ghes *ghes;
 };
 
-#ifndef XSEC_ATOMIC_UNCHECKED
+#ifdef XSEC_ATOMIC_UNCHECKED
 struct ghes_estatus_cache {
 	u32 estatus_len;
 	atomic_unchecked_t count;

@@ -341,13 +341,21 @@ acpi_status acpi_os_enter_sleep(u8 sleep_state, u32 rega_value, u32 regb_value);
  * Debug print routines
  */
 #ifndef ACPI_USE_ALTERNATE_PROTOTYPE_acpi_os_printf
-//TODO
+#ifndef XSEC_PRINTF
 __printf(1, 2)
 void ACPI_INTERNAL_VAR_XFACE acpi_os_printf(const char *format, ...);
+#else
+void ACPI_INTERNAL_VAR_XFACE acpi_os_printf(const char *format, ...);
+#endif /* XSEC_PRINTF */
 #endif
 
 #ifndef ACPI_USE_ALTERNATE_PROTOTYPE_acpi_os_vprintf
-__printf(1, 0) void acpi_os_vprintf(const char *format, va_list args);
+#ifndef XSEC_PRINTF
+__printf(1, 0)
+void acpi_os_vprintf(const char *format, va_list args);
+#else
+void acpi_os_vprintf(const char *format, va_list args);
+#endif /* XSEC_PRINTF */
 #endif
 
 #ifndef ACPI_USE_ALTERNATE_PROTOTYPE_acpi_os_redirect_output

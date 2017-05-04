@@ -938,7 +938,25 @@ ACPI_MSG_DEPENDENT_RETURN_VOID(ACPI_PRINTF_LIKE(3)
 /*
  * Debug output
  */
+#ifndef XSEC_NOCAPTURE
 ACPI_DBG_DEPENDENT_RETURN_VOID(ACPI_PRINTF_LIKE(6) __nocapture(3)
+			       void ACPI_INTERNAL_VAR_XFACE
+			       acpi_debug_print(u32 requested_debug_level,
+						u32 line_number,
+						const char *function_name,
+						const char *module_name,
+						u32 component_id,
+						const char *format, ...))
+ACPI_DBG_DEPENDENT_RETURN_VOID(ACPI_PRINTF_LIKE(6) __nocapture(3)
+				void ACPI_INTERNAL_VAR_XFACE
+				acpi_debug_print_raw(u32 requested_debug_level,
+						     u32 line_number,
+						     const char *function_name,
+						     const char *module_name,
+						     u32 component_id,
+						     const char *format, ...))
+#else
+ACPI_DBG_DEPENDENT_RETURN_VOID(ACPI_PRINTF_LIKE(6)
 			       void ACPI_INTERNAL_VAR_XFACE
 			       acpi_debug_print(u32 requested_debug_level,
 						u32 line_number,
@@ -954,6 +972,8 @@ ACPI_DBG_DEPENDENT_RETURN_VOID(ACPI_PRINTF_LIKE(6)
 						     const char *module_name,
 						     u32 component_id,
 						     const char *format, ...))
+#endif
+
 
 ACPI_DBG_DEPENDENT_RETURN_VOID(void
 			       acpi_trace_point(acpi_trace_event_type type,

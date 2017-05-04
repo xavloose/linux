@@ -30,13 +30,23 @@ struct ghes_estatus_node {
 	struct ghes *ghes;
 };
 
+#ifndef XSEC_ATOMIC_UNCHECKED
 struct ghes_estatus_cache {
 	u32 estatus_len;
-	atomic_unchecked_t count; //TODO: this should checked to where xsec has it...
+	atomic_unchecked_t count;
 	struct acpi_hest_generic *generic;
 	unsigned long long time_in;
 	struct rcu_head rcu;
 };
+#else
+struct ghes_estatus_cache {
+	u32 estatus_len;
+	atomic_t count;
+	struct acpi_hest_generic *generic;
+	unsigned long long time_in;
+	struct rcu_head rcu;
+};
+#endif /* XSEC_ATOMIC_UNCHECKED */
 
 enum {
 	GHES_SEV_NO = 0x0,

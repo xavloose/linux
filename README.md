@@ -1,7 +1,7 @@
 NOTICE: My fork is currently broken as I am working on porting grsecurity's last
 free patch to the mainline linux kernel. I am renaming and reorgainizing the
 project to avoid trademark issues. The original patch was under the gpl2 Licsence
-but I plan to use a modified MIT that will consist of my changes on top of theirs.
+and I feel it is best to keep it continuation as such.
 I'll set up a link to such once I finished the port :)
 
 ### Support Xsec [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=NFPU6CRVSAES2&lc=US&item_name=xsec&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donate_SM%2egif%3aNonHosted)
@@ -37,6 +37,8 @@ Current Patches:
  - Make all of grsecurity's uncondiontional changes linked to Kconfig
  - Add support for other patches that didn't play nice like MuQSS and BFQ. This will most likely come at a increased security risk (of course).
  - More to come :)
+### Other TODO
+ - References to past contributors 
 
 Linux kernel
 ============

@@ -76,13 +76,25 @@ struct bug_entry {
  * to provide better diagnostics.
  */
 #ifndef __WARN_TAINT
+#ifdef XSEC_NOCAPTURE
+extern __printf(3, 4) __nocapture(1)
+#else
 extern __printf(3, 4)
+#endif
 void warn_slowpath_fmt(const char *file, const int line,
 		       const char *fmt, ...);
+#ifdef XSEC_NOCAPTURE
+extern __printf(4, 5) __nocapture(1)
+#else
 extern __printf(4, 5)
+#endif
 void warn_slowpath_fmt_taint(const char *file, const int line, unsigned taint,
 			     const char *fmt, ...);
+#ifdef XSEC_NOCAPTURE
+extern __nocapture(1) void warn_slowpath_fmt(const char *file, const int line);
+#else
 extern void warn_slowpath_null(const char *file, const int line);
+#endif
 #define WANT_WARN_ON_SLOWPATH
 #define __WARN()		warn_slowpath_null(__FILE__, __LINE__)
 #define __WARN_printf(arg...)	warn_slowpath_fmt(__FILE__, __LINE__, arg)
@@ -98,6 +110,9 @@ extern void warn_slowpath_null(const char *file, const int line);
 /* used internally by panic.c */
 struct warn_args;
 
+#ifdef XSEC_NOCAPTURE
+__nocapture(1)
+#endif
 void __warn(const char *file, int line, void *caller, unsigned taint,
 	    struct pt_regs *regs, struct warn_args *args);
 
@@ -167,7 +182,11 @@ void __warn(const char *file, int line, void *caller, unsigned taint,
 #endif
 
 #ifndef HAVE_ARCH_BUG_ON
+#ifdef XSEC_UNLIKELY
+#define BUG_ON(condition) do { if (unlikely(condition) BUG(); } while(0)
+#else
 #define BUG_ON(condition) do { if (condition) BUG(); } while (0)
+#endif
 #endif
 
 #ifndef HAVE_ARCH_WARN_ON

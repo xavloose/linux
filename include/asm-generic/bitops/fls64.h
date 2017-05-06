@@ -15,7 +15,11 @@
  * at position 64.
  */
 #if BITS_PER_LONG == 32
+#ifdef XSEC_INTENTIONAL_OVERFLOW
+static __always_inline int __intentional_overflow(-1) fls64(__u64 x)
+#else
 static __always_inline int fls64(__u64 x)
+#endif
 {
 	__u32 h = x >> 32;
 	if (h)
@@ -23,7 +27,11 @@ static __always_inline int fls64(__u64 x)
 	return fls(x);
 }
 #elif BITS_PER_LONG == 64
+#ifdef XSEC_INTENTIONAL_OVERFLOW
+static __always_inline int __intentional_overflow(-1) fls(__u64 x)
+#else
 static __always_inline int fls64(__u64 x)
+#endif
 {
 	if (x == 0)
 		return 0;

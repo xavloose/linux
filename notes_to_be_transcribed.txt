@@ -11,6 +11,7 @@ Changed Files Without Changes:
   /include/asm-generic/atomic64.h
   /*WELLLLLLLL I FIGURED OUT AFTER THIS....*/
   /include/asm-generic/bitmops/__fls.h
+  /include/asm-generic/bug.h
 
 Changed Files With TODO's:
   /include/asm-generic/4levelfixup.h
@@ -20,3 +21,9 @@ XSEC_PRINTF && XSEC_ATOMIC_UNCHECKED && XSEC_NOCAPTURE
   /include/acpi/acpiosxf.h
   /include/acpi/acpixf.h
   /include/acpi/ghes.h
+
+XSEC_INTENTIONAL_OVERFLOW
+  /include/asm-generic/bitmops/fls64.h
+
+New Files
+  /include/linux/xacl.h

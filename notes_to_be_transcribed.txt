@@ -27,3 +27,6 @@ XSEC_INTENTIONAL_OVERFLOW
 
 New Files
   /include/linux/xacl.h
+  /include/linux/xacl_compat.h
+  /include/linux/xalloc.h
+  /include/linux/xdefs.h

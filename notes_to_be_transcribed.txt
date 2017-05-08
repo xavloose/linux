@@ -30,3 +30,4 @@ New Files
   /include/linux/xacl_compat.h
   /include/linux/xalloc.h
   /include/linux/xdefs.h
+  /include/linux/xinternal.h
